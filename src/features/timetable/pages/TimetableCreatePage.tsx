@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  CaretDown,
-  CaretUp,
   Clock,
   LockSimple,
   Plus,
-  Sparkle,
 } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 import { reservationApi, weekApi } from "../../../api/taurusApi";
@@ -25,7 +22,10 @@ import { TimeGrid } from "../components/TimeGrid";
 import { TimeGranularity } from "../types";
 import {
   buildRoomOverlayMap,
-  getLockedSlotsFromReservations,
+  generateTimeLabels,
+  getAdminLockedSlotsFromReservations,
+  getConfirmedTeamSlotsFromReservations,
+  makeSlotKey,
 } from "../utils/timeUtils";
 
 const TITLE_PRESETS = [
@@ -52,9 +52,12 @@ export function TimetableCreatePage() {
     []
   );
 
+  // Pre-creation manual lock overrides (persisted across date/range changes)
+  const [manualLockedSlots, setManualLockedSlots] = useState<string[]>([]);
+  const [manualUnlockedSlots, setManualUnlockedSlots] = useState<string[]>([]);
+  const [touchDragLock, setTouchDragLock] = useState(false);
+
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [showLockEditor, setShowLockEditor] = useState(false);
-  const [lockedSlots, setLockedSlots] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -75,6 +78,21 @@ export function TimetableCreatePage() {
   const effectiveStartHour = useTimeRange ? startHour : 0;
   const effectiveEndHour = useTimeRange ? endHour : 24;
 
+  const validSlotKeySet = useMemo(() => {
+    const labels = generateTimeLabels(
+      effectiveStartHour,
+      effectiveEndHour,
+      intervalMinutes
+    );
+    const set = new Set<string>();
+    for (const date of selectedDates) {
+      for (const time of labels) {
+        set.add(makeSlotKey(date, time));
+      }
+    }
+    return set;
+  }, [selectedDates, effectiveStartHour, effectiveEndHour, intervalMinutes]);
+
   const roomOverlayMap = useMemo(
     () =>
       buildRoomOverlayMap(
@@ -92,6 +110,95 @@ export function TimetableCreatePage() {
       intervalMinutes,
     ]
   );
+
+  const adminLockedSlots = useMemo(
+    () =>
+      getAdminLockedSlotsFromReservations(
+        allRoomReservations,
+        selectedDates,
+        effectiveStartHour,
+        effectiveEndHour,
+        intervalMinutes
+      ),
+    [
+      allRoomReservations,
+      selectedDates,
+      effectiveStartHour,
+      effectiveEndHour,
+      intervalMinutes,
+    ]
+  );
+
+  const confirmedTeamSlots = useMemo(
+    () =>
+      getConfirmedTeamSlotsFromReservations(
+        allRoomReservations,
+        selectedDates,
+        effectiveStartHour,
+        effectiveEndHour,
+        intervalMinutes
+      ),
+    [
+      allRoomReservations,
+      selectedDates,
+      effectiveStartHour,
+      effectiveEndHour,
+      intervalMinutes,
+    ]
+  );
+
+  const adminLockedSet = useMemo(
+    () => new Set(adminLockedSlots),
+    [adminLockedSlots]
+  );
+  const confirmedTeamSet = useMemo(
+    () => new Set(confirmedTeamSlots),
+    [confirmedTeamSlots]
+  );
+
+  /** Static locks saved to timetable.lockedSlots (excludes dynamic CONFIRMED_ADMIN slots so admin cancellation unlocks them) */
+  const staticLockedSlots = useMemo(() => {
+    const manualUnlockedSet = new Set(manualUnlockedSlots);
+    const set = new Set<string>();
+    if (autoLockRoomSlots) {
+      for (const k of confirmedTeamSlots) {
+        if (!manualUnlockedSet.has(k) && !adminLockedSet.has(k)) {
+          set.add(k);
+        }
+      }
+    }
+    for (const k of manualLockedSlots) {
+      if (validSlotKeySet.has(k) && !adminLockedSet.has(k)) {
+        set.add(k);
+      }
+    }
+    return Array.from(set).sort();
+  }, [
+    autoLockRoomSlots,
+    confirmedTeamSlots,
+    manualLockedSlots,
+    manualUnlockedSlots,
+    validSlotKeySet,
+    adminLockedSet,
+  ]);
+
+  const handleLockedSlotsChange = (nextSlots: string[]) => {
+    const nextSet = new Set(nextSlots);
+    const nextManualLocked = nextSlots.filter(
+      (k) =>
+        !adminLockedSet.has(k) && !(autoLockRoomSlots && confirmedTeamSet.has(k))
+    );
+    const nextManualUnlocked = autoLockRoomSlots
+      ? confirmedTeamSlots.filter((k) => !adminLockedSet.has(k) && !nextSet.has(k))
+      : [];
+    setManualLockedSlots(nextManualLocked);
+    setManualUnlockedSlots(nextManualUnlocked);
+  };
+
+  const totalLockedCount = staticLockedSlots.length + adminLockedSlots.length;
+  const hasManualOverride =
+    manualLockedSlots.some((k) => validSlotKeySet.has(k)) ||
+    manualUnlockedSlots.some((k) => validSlotKeySet.has(k));
 
   const overlappingRoomEntries = useMemo(() => {
     const dateSet = new Set(selectedDates);
@@ -135,17 +242,6 @@ export function TimetableCreatePage() {
 
   const handleOpenConfirm = () => {
     if (selectedDates.length === 0) return;
-    const autoLocked = autoLockRoomSlots
-      ? getLockedSlotsFromReservations(
-          allRoomReservations,
-          selectedDates,
-          effectiveStartHour,
-          effectiveEndHour,
-          intervalMinutes
-        )
-      : [];
-    setLockedSlots(autoLocked);
-    setShowLockEditor(autoLocked.length > 0);
     setConfirmOpen(true);
   };
 
@@ -158,7 +254,7 @@ export function TimetableCreatePage() {
         startHour: effectiveStartHour,
         endHour: effectiveEndHour,
         intervalMinutes,
-        lockedSlots,
+        lockedSlots: staticLockedSlots,
       });
       setConfirmOpen(false);
       navigate(`/timetable/${created.id}`);
@@ -177,7 +273,7 @@ export function TimetableCreatePage() {
         description="시간 조율 링크를 만들어 팀원들에게 공유하고, 합주 골든타임을 찾아 바로 예약하세요."
       />
 
-      {/* Main 3-Step Creation + Live Preview */}
+      {/* Main 3-Step Creation + Live Lockable Preview */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
         <div className="md:col-span-7 space-y-5">
           {/* Step 1: Meeting Title */}
@@ -305,31 +401,44 @@ export function TimetableCreatePage() {
               </div>
             </div>
 
-            <div className="pt-2 border-t border-border">
+            <div className="pt-2 border-t border-border space-y-1.5">
               <Checkbox
                 checked={autoLockRoomSlots}
-                onChange={(e) => setAutoLockRoomSlots(e.target.checked)}
+                onChange={(e) => {
+                  setAutoLockRoomSlots(e.target.checked);
+                  setManualUnlockedSlots([]);
+                }}
                 label={
                   <span className="text-xs text-text-sub">
-                    토러스 합주실에 이미 확정/관리자 예약된 시간 자동 잠금
+                    토러스 합주실에 이미 확정 예약된 시간 자동 잠금
                   </span>
                 }
               />
+              <p className="text-[11px] text-text-muted pl-6">
+                관리자 지정 예약은 항상 자동 잠금되며, 관리자가 취소하면 잠금도 함께 해제됩니다.
+              </p>
             </div>
           </Card>
         </div>
 
-        {/* Right Column: Live Preview (with Admin & Pre-reservation badges) & Create CTA */}
+        {/* Right Column: Live Interactive Time Lock + Preview & Create CTA */}
         <div className="md:col-span-5 md:sticky md:top-20 space-y-4">
           <Card className="p-5 space-y-4 border-white/10">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Sparkle size={18} weight="fill" className="text-brand-red" />
-                <h3 className="text-base font-bold text-white">미리보기</h3>
+                <LockSimple size={17} weight="bold" className="text-brand-red" />
+                <h3 className="text-base font-bold text-white">
+                  미리보기 · 시간 잠금
+                </h3>
               </div>
-              <Badge variant="outline">
-                {intervalMinutes === 60 ? "1시간 간격" : "30분 간격"}
-              </Badge>
+              <div className="flex items-center gap-1.5">
+                {totalLockedCount > 0 && (
+                  <Badge variant="brand">{totalLockedCount}칸 잠김</Badge>
+                )}
+                <Badge variant="outline">
+                  {intervalMinutes === 60 ? "1시간" : "30분"}
+                </Badge>
+              </div>
             </div>
 
             <div className="bg-bg-main rounded-xl p-3.5 border border-white/5 space-y-2 text-xs">
@@ -345,28 +454,64 @@ export function TimetableCreatePage() {
                   {String(effectiveEndHour).padStart(2, "0")}:00
                 </span>
               </div>
-              <div className="flex flex-wrap gap-1.5 pt-1 border-t border-white/5 text-[10px]">
-                <span className="px-1.5 py-0.5 rounded bg-red-950/90 border border-red-500/40 text-red-300 font-semibold">
-                  관리자 지정
+              <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-white/5 text-[10px] text-text-sub">
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-red-950 border border-red-500/45" />
+                  관리자 잠금
                 </span>
-                <span className="px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 font-semibold">
-                  확정 예약
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-neutral-800 border border-white/20" />
+                  직접/확정 잠금
                 </span>
-                <span className="px-1.5 py-0.5 rounded bg-yellow-950/90 border border-yellow-500/50 text-yellow-300 font-semibold">
-                  미리 예약 대기
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-amber-500/40 border border-amber-400/70" />
+                  미리예약 대기
                 </span>
               </div>
             </div>
 
             {selectedDates.length > 0 ? (
               <>
-                <div className="max-h-72 overflow-y-auto custom-scrollbar">
+                <div className="flex items-center justify-between gap-2 text-[11px] text-text-sub">
+                  <span>칸을 클릭·드래그해 선택 불가 시간을 미리 잠그세요.</span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setTouchDragLock((v) => !v)}
+                      className={`sm:hidden px-2 py-1 rounded-md text-[10px] font-semibold border transition-colors cursor-pointer ${
+                        touchDragLock
+                          ? "bg-brand-red/20 border-brand-red text-brand-red"
+                          : "bg-bg-main border-border text-text-sub"
+                      }`}
+                    >
+                      {touchDragLock ? "드래그 잠금 ON" : "드래그 잠금"}
+                    </button>
+                    {hasManualOverride && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManualLockedSlots([]);
+                          setManualUnlockedSlots([]);
+                        }}
+                        className="text-[11px] text-text-muted hover:text-white underline cursor-pointer"
+                      >
+                        잠금 초기화
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="md:max-h-[380px] md:overflow-y-auto custom-scrollbar">
                   <TimeGrid
                     dates={selectedDates}
                     startHour={effectiveStartHour}
                     endHour={effectiveEndHour}
                     intervalMinutes={intervalMinutes}
-                    mode="preview"
+                    mode="lock"
+                    lockedSlots={staticLockedSlots}
+                    adminLockedSlots={adminLockedSlots}
+                    onLockedSlotsChange={handleLockedSlotsChange}
+                    touchDragEnabled={touchDragLock}
                     roomOverlayMap={roomOverlayMap}
                   />
                 </div>
@@ -394,7 +539,7 @@ export function TimetableCreatePage() {
                               isAdmin
                                 ? "text-red-400"
                                 : isPending
-                                ? "text-yellow-400"
+                                ? "text-amber-400"
                                 : "text-emerald-400"
                             }`}
                           >
@@ -414,7 +559,7 @@ export function TimetableCreatePage() {
               <div className="py-12 text-center text-xs text-text-muted border border-dashed border-white/10 rounded-xl">
                 후보 날짜를 선택하거나 드래그하면
                 <br />
-                시간표 및 기존 합주실 예약 현황이 미리보기에 표시됩니다.
+                시간표 잠금 설정과 기존 합주실 예약 현황이 표시됩니다.
               </div>
             )}
 
@@ -438,74 +583,49 @@ export function TimetableCreatePage() {
         </div>
       </div>
 
-      {/* Confirmation + Optional Time Lock Modal */}
+      {/* Streamlined Creation Confirmation Modal */}
       <Modal
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         title="이대로 만들까요?"
-        maxWidth="max-w-lg"
+        maxWidth="max-w-md"
       >
         <div className="space-y-4">
-          <div className="bg-bg-main/80 border border-border rounded-xl p-4 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-text-sub">모임 이름</span>
-              <span className="font-bold text-white">
+          <div className="bg-bg-main/80 border border-border rounded-xl p-4 space-y-2.5 text-sm">
+            <div className="flex justify-between gap-3">
+              <span className="text-text-sub shrink-0">모임 이름</span>
+              <span className="font-bold text-white truncate">
                 {title.trim() || "합주 시간 조율"}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-text-sub">후보 날짜</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-text-sub shrink-0">후보 날짜</span>
               <span className="font-semibold text-white">
                 {selectedDates.length}일 (
                 {dayjs(selectedDates[0]).format("M/D")} ~{" "}
                 {dayjs(selectedDates[selectedDates.length - 1]).format("M/D")})
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-text-sub">시간 범위</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-text-sub shrink-0">시간 범위</span>
               <span className="font-semibold text-white">
                 {String(effectiveStartHour).padStart(2, "0")}:00 ~{" "}
                 {String(effectiveEndHour).padStart(2, "0")}:00 (
                 {intervalMinutes}분)
               </span>
             </div>
-          </div>
-
-          <div className="border border-border rounded-xl overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowLockEditor((v) => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-surface-elevated/40 hover:bg-surface-elevated/70 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2 text-sm font-semibold text-text-main">
-                <LockSimple size={16} className="text-brand-red" />
-                <span>시간 잠금 (선택)</span>
-                {lockedSlots.length > 0 && (
-                  <Badge variant="brand">{lockedSlots.length}칸 잠김</Badge>
-                )}
-              </div>
-              {showLockEditor ? <CaretUp size={16} /> : <CaretDown size={16} />}
-            </button>
-
-            {showLockEditor && (
-              <div className="p-3 space-y-2 bg-bg-main/50">
-                <p className="text-xs text-text-sub">
-                  클릭하거나 드래그해서 참여자들이 선택할 수 없도록 막을 시간대를 지정하세요.
-                </p>
-                <div className="max-h-72 overflow-y-auto custom-scrollbar">
-                  <TimeGrid
-                    dates={selectedDates}
-                    startHour={effectiveStartHour}
-                    endHour={effectiveEndHour}
-                    intervalMinutes={intervalMinutes}
-                    mode="lock"
-                    lockedSlots={lockedSlots}
-                    onLockedSlotsChange={setLockedSlots}
-                    roomOverlayMap={roomOverlayMap}
-                  />
-                </div>
-              </div>
-            )}
+            <div className="flex justify-between gap-3">
+              <span className="text-text-sub shrink-0">잠긴 시간</span>
+              <span className="font-semibold text-white">
+                {totalLockedCount > 0
+                  ? `${totalLockedCount}칸${
+                      adminLockedSlots.length > 0
+                        ? ` (관리자 ${adminLockedSlots.length}칸 포함)`
+                        : ""
+                    }`
+                  : "없음"}
+              </span>
+            </div>
           </div>
 
           <div className="flex gap-2 pt-2">

@@ -489,6 +489,48 @@ export const mockTaurusStore = {
 
     db.reservations.push(created);
     saveDb(db);
+
+    // Clear existing participant selections on any local timetables overlapping this admin reservation
+    try {
+      const rawTimetables = localStorage.getItem("taurus_timetables_v1");
+      if (rawTimetables) {
+        const timetables = JSON.parse(rawTimetables) as Array<{
+          dates: string[];
+          intervalMinutes: 30 | 60;
+          participants: Array<{
+            availableSlots: string[];
+            updatedAt: string;
+          }>;
+        }>;
+        const dateStr = start.format("YYYY-MM-DD");
+        const hh = String(start.hour()).padStart(2, "0");
+        let modified = false;
+        for (const table of timetables) {
+          if (!table.dates.includes(dateStr)) continue;
+          const blockedKeys = new Set(
+            table.intervalMinutes === 30
+              ? [`${dateStr}|${hh}:00`, `${dateStr}|${hh}:30`]
+              : [`${dateStr}|${hh}:00`]
+          );
+          for (const participant of table.participants || []) {
+            const filtered = participant.availableSlots.filter(
+              (k) => !blockedKeys.has(k)
+            );
+            if (filtered.length !== participant.availableSlots.length) {
+              participant.availableSlots = filtered;
+              participant.updatedAt = new Date().toISOString();
+              modified = true;
+            }
+          }
+        }
+        if (modified) {
+          localStorage.setItem("taurus_timetables_v1", JSON.stringify(timetables));
+        }
+      }
+    } catch {
+      // Ignore malformed localStorage timetable payload
+    }
+
     return created;
   },
 

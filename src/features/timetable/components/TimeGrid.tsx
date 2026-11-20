@@ -21,9 +21,13 @@ interface TimeGridProps {
   onMySelectedSlotsChange?: (slots: string[]) => void;
   /** In "unified" mode: true = drag paints mySelectedSlots; false = click inspects cell */
   interactiveEdit?: boolean;
-  /** Locked slots across modes */
+  /** Creator/manual locked slots across modes */
   lockedSlots?: string[];
+  /** Admin-occupied slots dynamically synced from CONFIRMED_ADMIN reservations */
+  adminLockedSlots?: string[];
   onLockedSlotsChange?: (slots: string[]) => void;
+  /** In "lock" mode: when true, touch gestures drag-paint; when false, tap toggles and vertical swipe scrolls */
+  touchDragEnabled?: boolean;
   /** Heatmap data in "unified" mode */
   slotMap?: Map<string, GoldenTimeSlot>;
   maxCount?: number;
@@ -46,7 +50,9 @@ export function TimeGrid({
   onMySelectedSlotsChange,
   interactiveEdit = false,
   lockedSlots = [],
+  adminLockedSlots = [],
   onLockedSlotsChange,
+  touchDragEnabled = false,
   slotMap,
   maxCount = 0,
   totalParticipants = 0,
@@ -58,6 +64,7 @@ export function TimeGrid({
 }: TimeGridProps) {
   const [pageIdx, setPageIdx] = useState(0);
   const lastTapRef = useRef<{ key: string; time: number }>({ key: "", time: 0 });
+  const skipNextLockClickRef = useRef(false);
 
   // Always show up to 7 days per page on both PC & Mobile
   const pages = useMemo(() => paginateDates(dates, 7), [dates]);
@@ -79,6 +86,10 @@ export function TimeGrid({
     [mySelectedSlots]
   );
   const lockedSet = useMemo(() => new Set(lockedSlots), [lockedSlots]);
+  const adminLockedSet = useMemo(
+    () => new Set(adminLockedSlots),
+    [adminLockedSlots]
+  );
 
   const dragStateRef = useRef<{
     active: boolean;
@@ -97,8 +108,13 @@ export function TimeGrid({
 
   const isDragMode =
     mode === "lock" || (mode === "unified" && interactiveEdit);
+  const useTouchNone =
+    (mode === "unified" && interactiveEdit) ||
+    (mode === "lock" && touchDragEnabled);
 
   const applySlotPaint = (slotKey: string, paintAction: "add" | "remove") => {
+    if (adminLockedSet.has(slotKey)) return;
+
     if (mode === "unified" && interactiveEdit) {
       if (lockedSet.has(slotKey)) return;
       const next = new Set(latestMySelectedRef.current);
@@ -142,7 +158,13 @@ export function TimeGrid({
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [isDragMode, lockedSet, onMySelectedSlotsChange, onLockedSlotsChange]);
+  }, [
+    isDragMode,
+    lockedSet,
+    adminLockedSet,
+    onMySelectedSlotsChange,
+    onLockedSlotsChange,
+  ]);
 
   const handleCellPointerDown = (
     e: React.PointerEvent<HTMLButtonElement>,
@@ -150,10 +172,20 @@ export function TimeGrid({
   ) => {
     // In inspect mode or preview mode, NEVER handle on pointerdown so mobile scrolling never accidentally opens modals!
     if (mode === "preview" || (mode === "unified" && !interactiveEdit)) return;
-
+    if (adminLockedSet.has(slotKey)) return;
     if (mode === "unified" && lockedSet.has(slotKey)) return;
 
+    // In lock mode on touch screens without drag lock enabled, let tap fire onClick so vertical scrolling stays smooth
+    if (mode === "lock" && e.pointerType === "touch" && !touchDragEnabled) {
+      skipNextLockClickRef.current = false;
+      return;
+    }
+
     e.preventDefault();
+    if (mode === "lock") {
+      skipNextLockClickRef.current = true;
+    }
+
     const currentlyActive =
       mode === "unified" ? mySelectedSet.has(slotKey) : lockedSet.has(slotKey);
     const paintAction: "add" | "remove" = currentlyActive ? "remove" : "add";
@@ -166,8 +198,27 @@ export function TimeGrid({
     applySlotPaint(slotKey, paintAction);
   };
 
+  const handleLockCellClick = (slotKey: string) => {
+    if (mode !== "lock" || adminLockedSet.has(slotKey)) return;
+    if (skipNextLockClickRef.current) {
+      skipNextLockClickRef.current = false;
+      return;
+    }
+    const paintAction: "add" | "remove" = latestLockedRef.current.has(slotKey)
+      ? "remove"
+      : "add";
+    applySlotPaint(slotKey, paintAction);
+  };
+
   const handleCellClick = (slotKey: string) => {
-    if (mode !== "unified" || interactiveEdit || lockedSet.has(slotKey)) return;
+    if (
+      mode !== "unified" ||
+      interactiveEdit ||
+      lockedSet.has(slotKey) ||
+      adminLockedSet.has(slotKey)
+    ) {
+      return;
+    }
     const slot = slotMap?.get(slotKey);
     if (!slot) return;
 
@@ -211,9 +262,9 @@ export function TimeGrid({
       return (
         <span
           title={`미리 예약 대기: ${overlay.pendingTeams.join(", ")}`}
-          className="px-1 py-0.2 rounded bg-yellow-950/90 border border-yellow-500/50 text-[8px] sm:text-[9px] font-bold text-yellow-300 leading-tight truncate max-w-full"
+          className="text-[8px] sm:text-[9px] font-bold text-amber-200 leading-tight truncate max-w-full"
         >
-          미리{overlay.pendingTeams.length > 1 ? `(${overlay.pendingTeams.length})` : `:${overlay.pendingTeams[0]}`}
+          대기{overlay.pendingTeams.length > 1 ? `(${overlay.pendingTeams.length})` : `·${overlay.pendingTeams[0]}`}
         </span>
       );
     }
@@ -292,7 +343,7 @@ export function TimeGrid({
         {/* Time Rows with top/bottom breathing room so line-aligned labels (9 .. 23) never clip */}
         <div
           className={`pt-2.5 pb-2.5 ${
-            isDragMode ? "touch-none" : "touch-auto"
+            useTouchNone ? "touch-none" : "touch-auto"
           }`}
         >
           {timeLabels.map((timeStr, rowIdx) => {
@@ -336,8 +387,10 @@ export function TimeGrid({
                 {/* Day Cells */}
                 {visibleDates.map((dateStr) => {
                   const key = makeSlotKey(dateStr, timeStr);
-                  const isLocked = lockedSet.has(key);
+                  const isAdminLocked = adminLockedSet.has(key);
+                  const isLocked = lockedSet.has(key) || isAdminLocked;
                   const overlay = roomOverlayMap?.get(key);
+                  const hasPending = Boolean(overlay?.pendingTeams.length);
                   const isHighlighted = highlightedSlotKey === key;
                   const cellHeight =
                     intervalMinutes === 30 ? "h-6 sm:h-6" : "h-8 sm:h-8";
@@ -347,19 +400,24 @@ export function TimeGrid({
                       <div
                         key={key}
                         title={
-                          overlay?.confirmedAdmin
-                            ? `잠김 · 관리자 (${overlay.confirmedAdmin.description || "점유"})`
+                          isAdminLocked || overlay?.confirmedAdmin
+                            ? `잠김 · 관리자 지정 (${overlay?.confirmedAdmin?.description || "점유"})`
                             : overlay?.confirmedTeam
                             ? `잠김 · 확정 (${overlay.confirmedTeam.teamName || "예약됨"})`
                             : "선택 불가 (잠긴 시간)"
                         }
-                        className={`${cellHeight} border-r border-white/5 last:border-r-0 bg-neutral-900/95 flex items-center justify-center gap-0.5 px-0.5 text-neutral-500 overflow-hidden`}
+                        className={`${cellHeight} border-r border-white/5 last:border-r-0 flex items-center justify-center gap-0.5 px-0.5 overflow-hidden ${
+                          isAdminLocked || overlay?.confirmedAdmin
+                            ? "bg-red-950/35 text-red-300/85 ring-1 ring-inset ring-red-500/20"
+                            : "bg-neutral-900/95 text-neutral-500"
+                        }`}
                       >
-                        <LockSimple size={10} className="shrink-0" />
-                        {overlay && (
-                          <span className="text-[8px] truncate hidden sm:inline">
-                            {overlay.confirmedAdmin?.description ||
-                              overlay.confirmedTeam?.teamName ||
+                        <LockSimple size={10} weight="bold" className="shrink-0" />
+                        {(isAdminLocked || overlay) && (
+                          <span className="text-[8px] font-semibold truncate hidden sm:inline">
+                            {overlay?.confirmedAdmin?.description ||
+                              (isAdminLocked ? "관리자" : "") ||
+                              overlay?.confirmedTeam?.teamName ||
                               ""}
                           </span>
                         )}
@@ -368,23 +426,58 @@ export function TimeGrid({
                   }
 
                   if (mode === "lock") {
+                    if (isAdminLocked) {
+                      return (
+                        <div
+                          key={key}
+                          title={`관리자 지정 예약으로 자동 잠금됨 (${overlay?.confirmedAdmin?.description || "점유"}) · 관리자 취소 시 자동 해제`}
+                          className={`${cellHeight} border-r border-white/5 last:border-r-0 bg-red-950/40 text-red-300/90 ring-1 ring-inset ring-red-500/25 flex items-center justify-center gap-0.5 px-0.5 cursor-not-allowed overflow-hidden`}
+                        >
+                          <LockSimple size={10} weight="bold" className="shrink-0" />
+                          <span className="text-[8px] font-semibold truncate hidden sm:inline">
+                            {overlay?.confirmedAdmin?.description || "관리자"}
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    const isManualOrTeamLocked = lockedSet.has(key);
                     return (
                       <button
                         key={key}
                         type="button"
                         data-slot-key={key}
                         onPointerDown={(e) => handleCellPointerDown(e, key)}
-                        className={`${cellHeight} border-r border-white/5 last:border-r-0 transition-colors cursor-pointer flex items-center justify-center px-0.5 overflow-hidden ${
-                          isLocked
-                            ? "bg-neutral-700/80 text-white"
-                            : overlay?.pendingTeams.length
-                            ? "bg-yellow-500/10 hover:bg-white/10"
-                            : "bg-transparent hover:bg-white/5"
+                        onClick={() => handleLockCellClick(key)}
+                        title={
+                          isManualOrTeamLocked
+                            ? `${dateStr} ${timeStr} 잠김 (클릭해 해제)`
+                            : hasPending
+                            ? `${dateStr} ${timeStr} 미리예약 대기 (${overlay!.pendingTeams.join(", ")}) · 클릭해 잠금`
+                            : overlay?.confirmedTeam
+                            ? `${dateStr} ${timeStr} 확정 예약 (${overlay.confirmedTeam.teamName || "예약됨"}) · 클릭해 잠금`
+                            : `${dateStr} ${timeStr} 클릭 또는 드래그해 잠금`
+                        }
+                        className={`${cellHeight} border-r border-white/5 last:border-r-0 transition-colors cursor-pointer touch-manipulation flex items-center justify-center gap-0.5 px-0.5 overflow-hidden ${
+                          isManualOrTeamLocked
+                            ? "bg-neutral-800/95 text-neutral-100 ring-1 ring-inset ring-white/15"
+                            : hasPending
+                            ? "bg-amber-500/30 ring-1 ring-inset ring-amber-400/50 hover:bg-amber-500/40"
+                            : overlay?.confirmedTeam
+                            ? "bg-emerald-950/35 hover:bg-emerald-950/55"
+                            : "bg-transparent hover:bg-white/10"
                         }`}
                         aria-label={`${dateStr} ${timeStr} 잠금 토글`}
                       >
-                        {isLocked ? (
-                          <LockSimple size={11} weight="bold" />
+                        {isManualOrTeamLocked ? (
+                          <>
+                            <LockSimple size={10} weight="bold" className="shrink-0" />
+                            {overlay?.confirmedTeam && (
+                              <span className="text-[8px] text-neutral-300 truncate hidden sm:inline">
+                                {overlay.confirmedTeam.teamName}
+                              </span>
+                            )}
+                          </>
                         ) : (
                           renderOverlayLabel(overlay)
                         )}
@@ -401,8 +494,8 @@ export function TimeGrid({
                             ? "bg-red-950/35"
                             : overlay?.confirmedTeam
                             ? "bg-emerald-950/30"
-                            : overlay?.pendingTeams.length
-                            ? "bg-yellow-950/30"
+                            : hasPending
+                            ? "bg-amber-500/30 ring-1 ring-inset ring-amber-400/45"
                             : ""
                         }`}
                       >
@@ -411,7 +504,7 @@ export function TimeGrid({
                     );
                   }
 
-                  // UNIFIED mode: Heatmap + My Selected Checkmarks + Pre-reservation indicators
+                  // UNIFIED mode: Heatmap + Full-yellow Waitlist + My Selected Checkmarks
                   const slot = slotMap?.get(key);
                   const count = slot?.count || 0;
                   const isMine = mySelectedSet.has(key);
@@ -420,7 +513,32 @@ export function TimeGrid({
                     : false;
 
                   let bgStyle: React.CSSProperties = {};
-                  if (focusedParticipantName) {
+                  let countTextClass = "text-white/95 drop-shadow";
+
+                  if (hasPending) {
+                    if (focusedParticipantName) {
+                      if (isFocusedAvailable) {
+                        bgStyle = { backgroundColor: "rgba(234, 179, 8, 0.84)" };
+                        countTextClass = "text-neutral-950";
+                      } else {
+                        bgStyle = { backgroundColor: "rgba(234, 179, 8, 0.22)" };
+                        countTextClass = "text-amber-100";
+                      }
+                    } else if (count > 0 && maxCount > 0) {
+                      const ratio = count / maxCount;
+                      const alpha = 0.42 + ratio * 0.44;
+                      bgStyle = {
+                        backgroundColor: `rgba(234, 179, 8, ${alpha.toFixed(2)})`,
+                      };
+                      countTextClass =
+                        alpha >= 0.58
+                          ? "text-neutral-950"
+                          : "text-amber-50 drop-shadow";
+                    } else {
+                      bgStyle = { backgroundColor: "rgba(234, 179, 8, 0.34)" };
+                      countTextClass = "text-amber-100";
+                    }
+                  } else if (focusedParticipantName) {
                     bgStyle = isFocusedAvailable
                       ? { backgroundColor: "rgba(211, 44, 43, 0.85)" }
                       : { backgroundColor: "rgba(255, 255, 255, 0.02)" };
@@ -439,14 +557,13 @@ export function TimeGrid({
                   const showStripe =
                     !focusedParticipantName && Boolean(slot?.isMax);
 
-                  const pendingTitle =
-                    overlay?.pendingTeams.length
-                      ? ` · 미리예약 대기: ${overlay.pendingTeams.join(", ")}`
-                      : overlay?.confirmedAdmin
-                      ? ` · 관리자: ${overlay.confirmedAdmin.description || "점유"}`
-                      : overlay?.confirmedTeam
-                      ? ` · 확정: ${overlay.confirmedTeam.teamName || ""}`
-                      : "";
+                  const pendingTitle = hasPending
+                    ? ` · 미리예약 대기: ${overlay!.pendingTeams.join(", ")} (선택 가능)`
+                    : overlay?.confirmedAdmin
+                    ? ` · 관리자: ${overlay.confirmedAdmin.description || "점유"}`
+                    : overlay?.confirmedTeam
+                    ? ` · 확정: ${overlay.confirmedTeam.teamName || ""}`
+                    : "";
 
                   return (
                     <button
@@ -455,12 +572,6 @@ export function TimeGrid({
                       data-slot-key={key}
                       onPointerDown={(e) => handleCellPointerDown(e, key)}
                       onClick={() => handleCellClick(key)}
-                      onDoubleClick={() => {
-                        if (mode === "unified" && !interactiveEdit && !lockedSet.has(key)) {
-                          const s = slotMap?.get(key);
-                          if (s) onCellInspect?.(s);
-                        }
-                      }}
                       style={bgStyle}
                       title={`${dateStr} ${timeStr} (${count}/${totalParticipants}명)${pendingTitle}`}
                       className={`relative ${cellHeight} border-r border-white/5 last:border-r-0 transition-all cursor-pointer touch-manipulation flex items-center justify-center gap-0.5 px-0.5 overflow-hidden ${
@@ -470,38 +581,34 @@ export function TimeGrid({
                           ? "ring-2 ring-inset ring-emerald-400 z-[5]"
                           : isHighlighted
                           ? "ring-2 ring-inset ring-white z-10"
+                          : hasPending
+                          ? "ring-1 ring-inset ring-amber-400/65 hover:ring-amber-300"
                           : "hover:ring-1 hover:ring-inset hover:ring-white/50"
                       }`}
                     >
                       {/* Top-right emerald check indicator if selected by current user */}
                       {isMine && (
-                        <span className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-emerald-400 text-black flex items-center justify-center shadow">
+                        <span className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-emerald-400 text-black flex items-center justify-center shadow z-[6]">
                           <Check size={8} weight="bold" />
                         </span>
                       )}
 
-                      {/* Bottom-left amber dot/badge for pre-reservation pending or room status */}
-                      {overlay?.pendingTeams.length ? (
-                        <span
-                          className="absolute bottom-0.5 left-0.5 px-1 rounded bg-yellow-500/90 text-black text-[7px] sm:text-[8px] font-extrabold leading-tight max-w-[85%] truncate"
-                        >
-                          대기{overlay.pendingTeams.length}
-                        </span>
-                      ) : overlay?.confirmedAdmin ? (
-                        <span className="absolute bottom-0.5 left-0.5 px-1 rounded bg-red-500/80 text-white text-[7px] sm:text-[8px] font-bold leading-tight">
-                          관
-                        </span>
-                      ) : overlay?.confirmedTeam ? (
+                      {/* Subtle room status tag when confirmed team is unlocked */}
+                      {!hasPending && overlay?.confirmedTeam && (
                         <span className="absolute bottom-0.5 left-0.5 px-1 rounded bg-emerald-500/80 text-black text-[7px] sm:text-[8px] font-bold leading-tight">
                           확
                         </span>
-                      ) : null}
+                      )}
 
-                      {count > 0 && !focusedParticipantName && (
-                        <span className="text-[10px] font-bold text-white/95 drop-shadow z-[2]">
+                      {count > 0 && !focusedParticipantName ? (
+                        <span className={`text-[10px] font-bold z-[2] ${countTextClass}`}>
                           {count}
                         </span>
-                      )}
+                      ) : hasPending && !focusedParticipantName ? (
+                        <span className="text-[8px] sm:text-[9px] font-bold text-amber-200/95 truncate z-[2]">
+                          대기{overlay!.pendingTeams.length}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}

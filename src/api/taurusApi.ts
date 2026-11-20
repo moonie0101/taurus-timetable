@@ -44,9 +44,15 @@ let isRefreshing = false;
 apiClient.interceptors.response.use(
   (res) => (res.data && res.data.code === "SUCCESS" ? res.data.data : res.data),
   (error) => {
-    if (error.response?.status === 401 && !isRefreshing) {
+    const reqUrl = error.config?.url || "";
+    const isPasswordCheckEndpoint =
+      reqUrl.startsWith("/timetables") ||
+      reqUrl.startsWith("/auth/") ||
+      reqUrl === "/admin/verify";
+
+    if (error.response?.status === 401 && !isPasswordCheckEndpoint && !isRefreshing) {
       isRefreshing = true;
-      const isAdminUrl = (error.config?.url || "").startsWith("/admin");
+      const isAdminUrl = reqUrl.startsWith("/admin");
       if (isAdminUrl) {
         if (sessionStorage.getItem(ADMIN_TOKEN_KEY)) {
           sessionStorage.removeItem(ADMIN_TOKEN_KEY);

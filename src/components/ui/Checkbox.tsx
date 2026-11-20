@@ -28,15 +28,20 @@ export function Checkbox({
       } ${className}`}
     >
       <div className="relative flex items-center">
-        <input ref={inputRef} type="checkbox" className="peer sr-only" {...props} />
-        <div className="w-4 h-4 border border-border rounded bg-surface transition-all peer-checked:bg-brand-red peer-checked:border-brand-red peer-indeterminate:bg-brand-red peer-indeterminate:border-brand-red peer-focus-visible:ring-2 peer-focus-visible:ring-brand-red/50 group-hover:border-text-sub relative">
+        <input
+          ref={inputRef}
+          type="checkbox"
+          className="peer sr-only taurus-checkbox-input"
+          {...props}
+        />
+        <div className="taurus-checkbox-box w-4 h-4 border border-border rounded bg-surface transition-all peer-checked:bg-brand-red peer-checked:border-brand-red peer-indeterminate:bg-brand-red peer-indeterminate:border-brand-red peer-focus-visible:ring-2 peer-focus-visible:ring-brand-red/50 group-hover:border-text-sub relative">
           <Check
             weight="bold"
-            className="w-3.5 h-3.5 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 peer-checked:opacity-100 transition-opacity"
+            className="taurus-checkbox-check w-3.5 h-3.5 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity"
           />
           <Minus
             weight="bold"
-            className="w-3.5 h-3.5 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 peer-indeterminate:opacity-100 transition-opacity"
+            className="taurus-checkbox-minus w-3.5 h-3.5 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity"
           />
         </div>
       </div>

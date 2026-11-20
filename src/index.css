@@ -391,3 +391,16 @@ select.taurus-select::-ms-expand {
     transparent 7px
   );
 }
+
+/* Custom Checkbox icon states (descendants of peer sibling) */
+.taurus-checkbox-input:checked + .taurus-checkbox-box .taurus-checkbox-check {
+  opacity: 1;
+}
+
+.taurus-checkbox-input:indeterminate + .taurus-checkbox-box .taurus-checkbox-check {
+  opacity: 0;
+}
+
+.taurus-checkbox-input:indeterminate + .taurus-checkbox-box .taurus-checkbox-minus {
+  opacity: 1;
+}

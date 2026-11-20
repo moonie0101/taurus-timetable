@@ -1,19 +1,22 @@
-import { CalendarBlank, Clock, Sparkle, Warning } from "@phosphor-icons/react";
+import { CalendarBlank, Clock, Warning } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Modal } from "../../../components/ui/Modal";
 import { ROUTES } from "../../../constants/routes";
 import dayjs from "../../../lib/dayjs";
+import { Week } from "../../../types/taurus";
 import { GoldenTimeSlot, RoomSlotOverlay } from "../types";
 
 export function SlotDetailModal({
   slot,
   roomOverlay,
+  weeks = [],
   onClose,
 }: {
   slot: GoldenTimeSlot | null;
   roomOverlay?: RoomSlotOverlay;
+  weeks?: Week[];
   onClose: () => void;
 }) {
   const navigate = useNavigate();
@@ -26,6 +29,22 @@ export function SlotDetailModal({
   const [hourStr] = slot.time.split(":");
   const hour = Number(hourStr);
   const isRoomHour = hour >= 9 && hour <= 22;
+
+  const openWeek = weeks.find((w) => w.status === "OPEN") || null;
+  const nextWeek = openWeek
+    ? weeks.find((w) => w.weekNumber === openWeek.weekNumber + 1) || null
+    : null;
+
+  const inWeek = (w: Week | null) =>
+    Boolean(
+      w &&
+        !dateObj.isBefore(dayjs(w.startDate), "day") &&
+        !dateObj.isAfter(dayjs(w.endDate), "day")
+    );
+
+  const isCurrentWeek = inWeek(openWeek);
+  const isNextWeek = inWeek(nextWeek);
+  const isPastSlot = dateObj.hour(hour).minute(0).isBefore(dayjs());
 
   const handleGoReserve = (mode: "instant" | "pre") => {
     const targetRoute =
@@ -53,9 +72,8 @@ export function SlotDetailModal({
             </div>
           </div>
           {slot.isMax && (
-            <Badge variant="brand" className="gap-1 shrink-0">
-              <Sparkle size={12} weight="fill" />
-              가장 많이 모이는 시간
+            <Badge variant="brand" className="shrink-0">
+              최다 인원
             </Badge>
           )}
         </div>
@@ -65,8 +83,8 @@ export function SlotDetailModal({
           (roomOverlay.confirmedAdmin ||
             roomOverlay.confirmedTeam ||
             roomOverlay.pendingTeams.length > 0) && (
-            <div className="p-3.5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-yellow-400">
+            <div className="p-3.5 rounded-xl border border-amber-500/35 bg-amber-500/10 space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
                 <Warning size={14} weight="fill" />
                 <span>이 시간대 토러스 합주실 예약 현황</span>
               </div>
@@ -86,11 +104,11 @@ export function SlotDetailModal({
               )}
               {roomOverlay.pendingTeams.length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-xs text-yellow-200">
+                  <p className="text-xs text-amber-200">
                     • 미리 예약 대기 ({roomOverlay.pendingTeams.length}팀):{" "}
                     <strong>{roomOverlay.pendingTeams.join(", ")}</strong>
                   </p>
-                  <p className="text-[11px] text-yellow-300/80">
+                  <p className="text-[11px] text-amber-300/85">
                     이미 대기 팀이 있는 시간대이므로 추가 미리 예약 시 경합 실패가 발생할 수 있습니다.
                   </p>
                 </div>
@@ -134,7 +152,7 @@ export function SlotDetailModal({
             </div>
           ) : (
             <p className="text-xs text-status-success font-medium">
-              전원 참여 가능한 골든타임입니다!
+              전원 참여 가능한 골든타임입니다.
             </p>
           )}
         </div>
@@ -142,19 +160,29 @@ export function SlotDetailModal({
         {isRoomHour && (
           <div className="pt-3 border-t border-border space-y-2">
             <p className="text-xs text-text-sub">
-              이 시간으로 바로 합주실 예약을 진행할 수 있습니다.
+              {isPastSlot
+                ? "이미 지난 시간대입니다."
+                : isCurrentWeek
+                ? "이번 주 일정이므로 '바로 예약'으로 즉시 확정할 수 있습니다."
+                : isNextWeek
+                ? "다음 주 일정이므로 '미리 예약'으로 대기 신청할 수 있습니다."
+                : weeks.length > 0
+                ? "아직 열리지 않은 주차입니다. 예약 페이지에서 일정을 확인하세요."
+                : "이 시간으로 바로 합주실 예약을 진행할 수 있습니다."}
             </p>
             <div className="grid grid-cols-2 gap-2">
               <Button
                 size="sm"
-                variant="brand"
+                variant={isNextWeek ? "outline" : "brand"}
+                disabled={isPastSlot}
                 onClick={() => handleGoReserve("instant")}
               >
                 바로 예약 연결
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant={isNextWeek ? "brand" : "outline"}
+                disabled={isPastSlot}
                 onClick={() => handleGoReserve("pre")}
               >
                 미리 예약 연결

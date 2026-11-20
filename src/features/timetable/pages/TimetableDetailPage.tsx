@@ -19,7 +19,7 @@ import { Card } from "../../../components/ui/Card";
 import { EmptyState, PageContainer } from "../../../components/ui/Typography";
 import { ROUTES } from "../../../constants/routes";
 import dayjs from "../../../lib/dayjs";
-import { Reservation, ReservationStatus } from "../../../types/taurus";
+import { Reservation, ReservationStatus, Week } from "../../../types/taurus";
 import { timetableApi } from "../api/timetableApi";
 import { GoldenTimePanel } from "../components/GoldenTimePanel";
 import { ParticipantModal } from "../components/ParticipantModal";
@@ -29,6 +29,7 @@ import { GoldenTimeSlot, Timetable } from "../types";
 import {
   buildRoomOverlayMap,
   computeTimetableStats,
+  getAdminLockedSlotsFromReservations,
 } from "../utils/timeUtils";
 
 export function TimetableDetailPage() {
@@ -36,6 +37,7 @@ export function TimetableDetailPage() {
   const navigate = useNavigate();
 
   const [timetable, setTimetable] = useState<Timetable | null>(null);
+  const [allWeeks, setAllWeeks] = useState<Week[]>([]);
   const [allRoomReservations, setAllRoomReservations] = useState<Reservation[]>(
     []
   );
@@ -70,18 +72,20 @@ export function TimetableDetailPage() {
   );
   const [copied, setCopied] = useState(false);
 
-  const loadRoomReservations = useCallback(async () => {
+  const loadRoomReservations = useCallback(async (): Promise<Reservation[]> => {
     try {
       const weeks = await weekApi.getWeeks();
+      setAllWeeks(weeks);
       const activeWeeks = weeks.filter((w) => w.status !== "CLOSED");
       const results = await Promise.all(
         activeWeeks.map((w) => reservationApi.getReservations(String(w.id)))
       );
-      setAllRoomReservations(
-        results.flatMap((r) => [...r.confirmed, ...r.pending])
-      );
+      const combined = results.flatMap((r) => [...r.confirmed, ...r.pending]);
+      setAllRoomReservations(combined);
+      return combined;
     } catch (err) {
       console.error(err);
+      return [];
     }
   }, []);
 
@@ -91,16 +95,42 @@ export function TimetableDetailPage() {
       try {
         if (isRefresh) setRefreshing(true);
         else setLoading(true);
-        const [found] = await Promise.all([
+        const [found, roomReservations] = await Promise.all([
           timetableApi.getById(id),
           loadRoomReservations(),
         ]);
         setTimetable(found);
-        if (found && activeAuth) {
-          const existing = found.participants.find(
-            (p) => p.name === activeAuth.name
+        if (found) {
+          const dynamicAdminLocks = getAdminLockedSlotsFromReservations(
+            roomReservations,
+            found.dates,
+            found.startHour,
+            found.endHour,
+            found.intervalMinutes
           );
-          if (existing) setDraftSlots(existing.availableSlots);
+          const lockedNow = new Set([...found.lockedSlots, ...dynamicAdminLocks]);
+
+          if (activeAuth) {
+            if (!isRefresh) {
+              const existing = found.participants.find(
+                (p) => p.name === activeAuth.name
+              );
+              if (existing) {
+                setDraftSlots(
+                  existing.availableSlots.filter((k) => !lockedNow.has(k))
+                );
+              }
+            } else {
+              setDraftSlots((prev) => prev.filter((k) => !lockedNow.has(k)));
+            }
+          }
+
+          setSelectedInspectSlot((prev) =>
+            prev && lockedNow.has(prev.slotKey) ? null : prev
+          );
+          setInspectedSlot((prev) =>
+            prev && lockedNow.has(prev.slotKey) ? null : prev
+          );
         }
       } catch (err) {
         console.error(err);
@@ -116,6 +146,31 @@ export function TimetableDetailPage() {
     loadTable(false);
   }, [id]);
 
+  const adminLockedSlots = useMemo(() => {
+    if (!timetable) return [];
+    return getAdminLockedSlotsFromReservations(
+      allRoomReservations,
+      timetable.dates,
+      timetable.startHour,
+      timetable.endHour,
+      timetable.intervalMinutes
+    );
+  }, [allRoomReservations, timetable]);
+
+  const effectiveLockedSet = useMemo(() => {
+    if (!timetable) return new Set<string>();
+    return new Set([...timetable.lockedSlots, ...adminLockedSlots]);
+  }, [timetable, adminLockedSlots]);
+
+  // Keep draftSlots free of any dynamically admin-locked slots
+  useEffect(() => {
+    if (effectiveLockedSet.size === 0) return;
+    setDraftSlots((prev) => {
+      const filtered = prev.filter((k) => !effectiveLockedSet.has(k));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [effectiveLockedSet]);
+
   const { slotMap, maxCount, goldenTimes } = useMemo(() => {
     if (!timetable) {
       return {
@@ -124,8 +179,8 @@ export function TimetableDetailPage() {
         goldenTimes: [],
       };
     }
-    return computeTimetableStats(timetable);
-  }, [timetable]);
+    return computeTimetableStats(timetable, adminLockedSlots);
+  }, [timetable, adminLockedSlots]);
 
   const roomOverlayMap = useMemo(() => {
     if (!timetable) return new Map();
@@ -195,7 +250,11 @@ export function TimetableDetailPage() {
       password
     );
     setActiveAuth({ name, password });
-    setDraftSlots(participant ? [...participant.availableSlots] : []);
+    setDraftSlots(
+      participant
+        ? participant.availableSlots.filter((k) => !effectiveLockedSet.has(k))
+        : []
+    );
     setInteractionMode("edit");
   };
 
@@ -220,11 +279,13 @@ export function TimetableDetailPage() {
     }
     try {
       setSaving(true);
+      const sanitizedSlots = draftSlots.filter((k) => !effectiveLockedSet.has(k));
       const updated = await timetableApi.upsertParticipant(id, {
         name: activeAuth.name,
         password: activeAuth.password,
-        availableSlots: draftSlots,
+        availableSlots: sanitizedSlots,
       });
+      setDraftSlots(sanitizedSlots);
       setTimetable(updated);
       setSaveBanner("저장되었습니다!");
       setTimeout(() => setSaveBanner(null), 2500);
@@ -427,7 +488,7 @@ export function TimetableDetailPage() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 text-[10px] text-text-sub">
+                <div className="flex flex-wrap items-center gap-2 text-[10px] text-text-sub">
                   {activeAuth && (
                     <span className="inline-flex items-center gap-1">
                       <span className="w-2.5 h-2.5 rounded-sm border border-emerald-400 bg-emerald-400/30" />
@@ -435,10 +496,8 @@ export function TimetableDetailPage() {
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1">
-                    <span className="px-1 rounded bg-yellow-500 text-black font-bold text-[8px]">
-                      대기
-                    </span>
-                    미리예약
+                    <span className="w-2.5 h-2.5 rounded-sm border border-amber-400/80 bg-amber-400/50" />
+                    미리예약 대기 (선택 가능)
                   </span>
                   {maxCount > 0 && (
                     <span className="inline-flex items-center gap-1">
@@ -525,6 +584,7 @@ export function TimetableDetailPage() {
               onMySelectedSlotsChange={setDraftSlots}
               interactiveEdit={Boolean(activeAuth && interactionMode === "edit")}
               lockedSlots={timetable.lockedSlots}
+              adminLockedSlots={adminLockedSlots}
               slotMap={slotMap}
               maxCount={maxCount}
               totalParticipants={timetable.participants.length}
@@ -590,7 +650,7 @@ export function TimetableDetailPage() {
           <Card className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Clock size={16} className="text-yellow-400" />
+                <Clock size={16} className="text-amber-400" />
                 <h3 className="text-sm font-bold text-text-main">
                   기간 내 합주실 예약 · 미리 예약 현황
                 </h3>
@@ -668,6 +728,7 @@ export function TimetableDetailPage() {
         roomOverlay={
           inspectedSlot ? roomOverlayMap.get(inspectedSlot.slotKey) : undefined
         }
+        weeks={allWeeks}
         onClose={() => setInspectedSlot(null)}
       />
     </PageContainer>

@@ -43,7 +43,10 @@ export function getEndTimeLabel(
   return `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
 }
 
-export function computeTimetableStats(timetable: Timetable): {
+export function computeTimetableStats(
+  timetable: Timetable,
+  extraLockedSlots: string[] = []
+): {
   slotMap: Map<string, GoldenTimeSlot>;
   maxCount: number;
   goldenTimes: GoldenTimeSlot[];
@@ -53,7 +56,7 @@ export function computeTimetableStats(timetable: Timetable): {
     timetable.endHour,
     timetable.intervalMinutes
   );
-  const lockedSet = new Set(timetable.lockedSlots);
+  const lockedSet = new Set([...timetable.lockedSlots, ...extraLockedSlots]);
   const allNames = timetable.participants.map((p) => p.name);
 
   const rawSlots: Omit<GoldenTimeSlot, "isMax">[] = [];
@@ -110,23 +113,20 @@ export function computeTimetableStats(timetable: Timetable): {
   return { slotMap, maxCount, goldenTimes };
 }
 
-export function getLockedSlotsFromReservations(
+function extractSlotKeysByStatuses(
   reservations: Reservation[],
+  statuses: ReservationStatus[],
   dates: string[],
   startHour: number,
   endHour: number,
   intervalMinutes: TimeGranularity
 ): string[] {
   const dateSet = new Set(dates);
+  const statusSet = new Set(statuses);
   const locked = new Set<string>();
 
   for (const res of reservations) {
-    if (
-      res.status !== ReservationStatus.CONFIRMED &&
-      res.status !== ReservationStatus.CONFIRMED_ADMIN
-    ) {
-      continue;
-    }
+    if (!statusSet.has(res.status)) continue;
     const start = dayjs(res.startTime);
     const dateStr = start.format("YYYY-MM-DD");
     if (!dateSet.has(dateStr)) continue;
@@ -143,6 +143,57 @@ export function getLockedSlotsFromReservations(
   }
 
   return Array.from(locked).sort();
+}
+
+export function getAdminLockedSlotsFromReservations(
+  reservations: Reservation[],
+  dates: string[],
+  startHour: number,
+  endHour: number,
+  intervalMinutes: TimeGranularity
+): string[] {
+  return extractSlotKeysByStatuses(
+    reservations,
+    [ReservationStatus.CONFIRMED_ADMIN],
+    dates,
+    startHour,
+    endHour,
+    intervalMinutes
+  );
+}
+
+export function getConfirmedTeamSlotsFromReservations(
+  reservations: Reservation[],
+  dates: string[],
+  startHour: number,
+  endHour: number,
+  intervalMinutes: TimeGranularity
+): string[] {
+  return extractSlotKeysByStatuses(
+    reservations,
+    [ReservationStatus.CONFIRMED],
+    dates,
+    startHour,
+    endHour,
+    intervalMinutes
+  );
+}
+
+export function getLockedSlotsFromReservations(
+  reservations: Reservation[],
+  dates: string[],
+  startHour: number,
+  endHour: number,
+  intervalMinutes: TimeGranularity
+): string[] {
+  return extractSlotKeysByStatuses(
+    reservations,
+    [ReservationStatus.CONFIRMED, ReservationStatus.CONFIRMED_ADMIN],
+    dates,
+    startHour,
+    endHour,
+    intervalMinutes
+  );
 }
 
 export function buildRoomOverlayMap(

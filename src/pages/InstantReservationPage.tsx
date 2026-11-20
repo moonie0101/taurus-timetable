@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ReservationSection } from "../components/reservation/ReservationComponents";
 import { InlineAlert } from "../components/ui/InlineAlert";
@@ -9,6 +9,7 @@ import dayjs from "../lib/dayjs";
 
 export function InstantReservationPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [deepLinkNotice, setDeepLinkNotice] = useState<string | null>(null);
   const { teamName, teamPassword } = useAuth();
   const {
     weekData,
@@ -46,9 +47,18 @@ export function InstantReservationPage() {
           const [hh, mm] = qTime.split(":").map(Number);
           const slotDate = target.hour(hh).minute(mm || 0);
           if (!slotDate.isBefore(dayjs())) {
+            setDeepLinkNotice(null);
             initiateReservation(slotDate.format("YYYY-MM-DD HH:mm"));
+          } else {
+            setDeepLinkNotice(
+              `선택하신 ${target.format("M/D(ddd)")} ${qTime} 시간대는 이미 지나 예약할 수 없습니다.`
+            );
           }
         }
+      } else {
+        setDeepLinkNotice(
+          `선택하신 날짜(${target.format("M/D(ddd)")})는 이번 주 바로 예약 범위가 아닙니다. 다음 주 일정이라면 '미리 예약'을 이용해 주세요.`
+        );
       }
       setSearchParams({}, { replace: true });
     }
@@ -85,6 +95,12 @@ export function InstantReservationPage() {
           </p>
         </div>
       </InlineAlert>
+
+      {deepLinkNotice && (
+        <InlineAlert variant="warn" title="날짜 안내">
+          {deepLinkNotice}
+        </InlineAlert>
+      )}
 
       <ReservationSection
         weekData={weekData}

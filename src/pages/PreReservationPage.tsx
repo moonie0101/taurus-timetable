@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ReservationSection } from "../components/reservation/ReservationComponents";
 import { InlineAlert } from "../components/ui/InlineAlert";
@@ -9,6 +9,7 @@ import dayjs from "../lib/dayjs";
 
 export function PreReservationPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [deepLinkNotice, setDeepLinkNotice] = useState<string | null>(null);
   const { teamName, teamPassword } = useAuth();
   const {
     weekData,
@@ -40,12 +41,17 @@ export function PreReservationPage() {
         !target.isBefore(dayjs(weekData.startDate), "day") &&
         !target.isAfter(dayjs(weekData.endDate), "day")
       ) {
+        setDeepLinkNotice(null);
         handleDateSelect(target);
         if (qTime) {
           const [hh, mm] = qTime.split(":").map(Number);
           const slotDate = target.hour(hh).minute(mm || 0).second(0).millisecond(0);
           initiateReservation(slotDate.toISOString());
         }
+      } else {
+        setDeepLinkNotice(
+          `선택하신 날짜(${target.format("M/D(ddd)")})는 다음 주 미리 예약 범위가 아닙니다. 이번 주 일정은 '바로 예약'에서, 2주 이후 일정은 해당 주차 오픈 후 신청해 주세요.`
+        );
       }
       setSearchParams({}, { replace: true });
     }
@@ -104,6 +110,12 @@ export function PreReservationPage() {
           </p>
         </div>
       </InlineAlert>
+
+      {deepLinkNotice && (
+        <InlineAlert variant="warn" title="날짜 안내">
+          {deepLinkNotice}
+        </InlineAlert>
+      )}
 
       <ReservationSection
         weekData={weekData}

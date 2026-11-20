@@ -32,6 +32,21 @@ function formatYmd(date) {
   )}`;
 }
 
+function parseKstDate(input) {
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    const hasZone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(trimmed);
+    if (!hasZone) {
+      const normalized = trimmed.replace(" ", "T");
+      const withSeconds = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized)
+        ? `${normalized}:00`
+        : normalized;
+      return new Date(`${withSeconds}+09:00`);
+    }
+  }
+  return new Date(input);
+}
+
 function getKstDayStart(offsetDays = 0) {
   const now = new Date();
   const kstMs = now.getTime() + 9 * 60 * 60 * 1000;
@@ -225,7 +240,7 @@ function makeSeedDb() {
       startHour: 14,
       endHour: 23,
       intervalMinutes: 60,
-      lockedSlots: [`${demoDates[0]}|16:00`],
+      lockedSlots: [],
       createdAt: new Date(Date.now() - 86400000).toISOString(),
       participants: [
         {
@@ -461,7 +476,7 @@ const server = http.createServer(async (req, res) => {
       if (!team) return fail(res, "팀 인증이 필요합니다.", 401);
 
       const body = await readBody(req);
-      const startDate = new Date(body.startTime);
+      const startDate = parseKstDate(body.startTime);
       if (Number.isNaN(startDate.getTime())) {
         return fail(res, "유효하지 않은 시간 형식입니다.");
       }
@@ -624,7 +639,10 @@ const server = http.createServer(async (req, res) => {
 
     if (method === "POST" && pathname === "/admin/reservations") {
       const { startTime, description } = await readBody(req);
-      const startDate = new Date(startTime);
+      const startDate = parseKstDate(startTime);
+      if (Number.isNaN(startDate.getTime())) {
+        return fail(res, "유효하지 않은 시간 형식입니다.");
+      }
       const endDate = new Date(startDate.getTime() + 50 * 60000);
       const startIso = formatKstIso(startDate);
       const slotPrefix = startIso.slice(0, 16);
@@ -652,6 +670,30 @@ const server = http.createServer(async (req, res) => {
         description,
       };
       db.reservations.push(created);
+
+      // Clear existing participant selections on any timetables overlapping this admin reservation
+      const kstDateStr = startIso.slice(0, 10);
+      const kstHourStr = startIso.slice(11, 13);
+      for (const table of db.timetables || []) {
+        if (!Array.isArray(table.dates) || !table.dates.includes(kstDateStr)) {
+          continue;
+        }
+        const blockedKeys = new Set(
+          table.intervalMinutes === 30
+            ? [`${kstDateStr}|${kstHourStr}:00`, `${kstDateStr}|${kstHourStr}:30`]
+            : [`${kstDateStr}|${kstHourStr}:00`]
+        );
+        for (const participant of table.participants || []) {
+          const filtered = (participant.availableSlots || []).filter(
+            (k) => !blockedKeys.has(k)
+          );
+          if (filtered.length !== (participant.availableSlots || []).length) {
+            participant.availableSlots = filtered;
+            participant.updatedAt = new Date().toISOString();
+          }
+        }
+      }
+
       writeDb(db);
       return ok(res, created, 201);
     }

@@ -99,6 +99,10 @@
 * **Request Body**: `{ "name": "김영훈", "password": "1234" }`
 * **동작**: 비밀번호 검증 후 해당 참여자 레코드 삭제 → 갱신된 전체 `Timetable` 객체 반환
 
+### ⑦ 관리자 예약(`POST /admin/reservations`) 생성 시 권장 연동
+* 기존에 생성된 `Timetable` 중 관리자 예약 날짜가 포함된 표가 있다면, 해당 시간대 슬롯(`YYYY-MM-DD|HH:00`, 30분 단위 표는 `:30` 포함)을 참여자들의 `availableSlots`에서 제거해 주세요.
+* 잠금 상태 자체는 프론트엔드가 활성 `CONFIRMED_ADMIN` 예약과 실시간 동기화하므로 `Timetable.lockedSlots`에 영구 추가하지 않는 것을 권장합니다. (그래야 관리자가 추후 해당 예약을 취소했을 때 잠금도 자동으로 해제됩니다.)
+
 ---
 
 ## 3. 권장 DB 테이블 스키마 (PostgreSQL / Prisma 기준 예시)

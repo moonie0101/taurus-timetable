@@ -34,7 +34,7 @@ function createSeedTimetable(): Timetable {
     startHour: 14,
     endHour: 23,
     intervalMinutes: 60,
-    lockedSlots: [makeSlotKey(dates[0], "16:00")],
+    lockedSlots: [],
     createdAt: now.subtract(1, "day").toISOString(),
     participants: [
       {
