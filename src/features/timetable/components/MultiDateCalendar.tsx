@@ -133,7 +133,7 @@ export function MultiDateCalendar({
     allMonthDates.length > 0 && allMonthDates.every((d) => selectedSet.has(d));
 
   return (
-    <div className="bg-bg-main/60 border border-border rounded-2xl p-4 space-y-3 select-none">
+    <div className="space-y-3 select-none">
       <div className="flex items-center justify-between gap-1.5">
         <div className="flex items-center gap-0.5 sm:gap-1 min-w-0">
           <button
@@ -142,9 +142,9 @@ export function MultiDateCalendar({
             className="p-1.5 sm:p-2 rounded-lg text-text-sub hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
             aria-label="이전 달"
           >
-            <CaretLeft size={18} weight="bold" />
+            <CaretLeft size={16} weight="bold" />
           </button>
-          <span className="text-sm sm:text-lg font-bold text-text-main px-0.5 sm:px-1 whitespace-nowrap">
+          <span className="text-sm sm:text-base font-bold text-text-main px-1 whitespace-nowrap tabular-nums">
             {currentMonth.format("YYYY년 M월")}
           </span>
           <button
@@ -153,7 +153,7 @@ export function MultiDateCalendar({
             className="p-1.5 sm:p-2 rounded-lg text-text-sub hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
             aria-label="다음 달"
           >
-            <CaretRight size={18} weight="bold" />
+            <CaretRight size={16} weight="bold" />
           </button>
         </div>
 
@@ -161,19 +161,19 @@ export function MultiDateCalendar({
           <button
             type="button"
             onClick={() => toggleDateList(allMonthDates)}
-            className={`px-2 sm:px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap ${
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap ${
               isMonthAllSelected
-                ? "bg-brand-red/20 border-brand-red text-brand-red"
-                : "bg-surface border-border text-text-sub hover:text-white hover:border-border-active"
+                ? "bg-brand-red/15 border-brand-red/60 text-brand-red"
+                : "bg-bg-main border-border text-text-sub hover:text-white hover:border-border-active"
             }`}
           >
-            이번 달 전부
+            이번 달 전체
           </button>
           {selectedDates.length > 0 && (
             <button
               type="button"
               onClick={() => onChange([])}
-              className="px-2 sm:px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium bg-surface border border-border text-text-sub hover:text-white transition-colors cursor-pointer whitespace-nowrap"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-bg-main border border-border text-text-sub hover:text-white transition-colors cursor-pointer whitespace-nowrap"
             >
               초기화
             </button>
@@ -182,8 +182,8 @@ export function MultiDateCalendar({
       </div>
 
       {/* Weekday bulk-select header + spacer for week column */}
-      <div className="grid grid-cols-[40px_repeat(7,minmax(0,1fr))] gap-1 text-center items-center">
-        <span className="text-[10px] text-text-muted font-medium">주차</span>
+      <div className="grid grid-cols-[40px_repeat(7,minmax(0,1fr))] gap-1 text-center items-center border-t border-border pt-2.5">
+        <span className="text-[11px] text-text-muted font-medium">주차</span>
         {WEEKDAYS.map((label, dayIdx) => {
           const weekdayDates = monthWeeks
             .map((row) => row[dayIdx])
@@ -216,7 +216,7 @@ export function MultiDateCalendar({
       </div>
 
       {/* Week rows (touch-none on day cells for drag selection) */}
-      <div className="space-y-1.5 touch-none">
+      <div className="space-y-1 touch-none">
         {monthWeeks.map((row, weekIdx) => {
           const rowDates = row
             .filter((d): d is dayjs.Dayjs => Boolean(d))
@@ -235,8 +235,8 @@ export function MultiDateCalendar({
                 onClick={() => toggleDateList(rowDates)}
                 className={`h-9 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
                   allRowSelected
-                    ? "bg-brand-red/20 text-brand-red border border-brand-red/40"
-                    : "bg-surface/60 text-text-muted hover:text-text-main hover:bg-white/5"
+                    ? "bg-brand-red/15 text-brand-red border border-brand-red/40"
+                    : "bg-bg-main/80 text-text-muted hover:text-text-main hover:bg-white/5"
                 }`}
               >
                 {weekIdx + 1}주
@@ -256,9 +256,9 @@ export function MultiDateCalendar({
                     type="button"
                     data-cal-date={dateStr}
                     onPointerDown={(e) => handleDayPointerDown(e, dateStr)}
-                    className={`relative h-9 sm:h-10 rounded-xl text-sm font-medium transition-all flex items-center justify-center cursor-pointer ${
+                    className={`relative h-9 sm:h-10 rounded-lg text-sm font-medium tabular-nums transition-colors flex items-center justify-center cursor-pointer ${
                       isSelected
-                        ? "bg-brand-red text-white shadow-md shadow-brand-red/30 font-bold"
+                        ? "bg-brand-red text-white font-semibold"
                         : "text-text-main hover:bg-white/10"
                     }`}
                   >
@@ -278,11 +278,11 @@ export function MultiDateCalendar({
         })}
       </div>
 
-      <p className="text-[11px] text-text-muted pt-1">
-        * 날짜를 <span className="text-text-sub">드래그</span>하거나 요일(
-        <span className="text-text-sub">일~토</span>)·
-        <span className="text-text-sub">주차</span>를 눌러 한 번에 선택할 수 있습니다. (선택됨:{" "}
-        <span className="text-brand-red font-semibold">{selectedDates.length}일</span>)
+      <p className="text-xs text-text-muted pt-1">
+        드래그하거나 요일·주차 버튼으로 한 번에 선택할 수 있습니다.{" "}
+        <span className="text-text-sub font-semibold tabular-nums">
+          ({selectedDates.length}일 선택)
+        </span>
       </p>
     </div>
   );

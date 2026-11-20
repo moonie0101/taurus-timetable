@@ -1,5 +1,5 @@
-import { Trophy } from "@phosphor-icons/react";
 import { Badge } from "../../../components/ui/Badge";
+import { Card } from "../../../components/ui/Card";
 import dayjs from "../../../lib/dayjs";
 import { GoldenTimeSlot } from "../types";
 
@@ -19,26 +19,20 @@ export function GoldenTimePanel({
   const topSlots = goldenTimes.slice(0, 8);
 
   return (
-    <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Trophy size={18} weight="fill" className="text-brand-red" />
-          <h3 className="text-sm font-bold text-text-main">
-            골든타임 순위{" "}
-            <span className="text-text-sub font-normal">
-              (최대 {maxCount}명)
-            </span>
-          </h3>
-        </div>
-        <span className="text-[11px] text-text-muted">클릭 시 상세 보기</span>
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
+        <h3 className="text-sm font-bold text-text-main">골든타임 순위</h3>
+        <span className="text-xs text-text-sub tabular-nums">
+          최대 {maxCount}명
+        </span>
       </div>
 
       {topSlots.length === 0 ? (
-        <div className="text-center py-6 text-xs text-text-sub bg-bg-main/40 rounded-xl border border-dashed border-white/5">
+        <div className="text-center py-8 px-4 text-xs text-text-sub">
           아직 등록된 가능 시간이 없습니다.
         </div>
       ) : (
-        <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+        <div className="divide-y divide-border max-h-64 overflow-y-auto custom-scrollbar">
           {topSlots.map((item, idx) => {
             const isHighlighted = highlightedSlotKey === item.slotKey;
             const d = dayjs(item.date);
@@ -48,17 +42,17 @@ export function GoldenTimePanel({
                 type="button"
                 onMouseEnter={() => onSelectSlot(item.slotKey)}
                 onClick={() => onInspectSlot(item)}
-                className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer ${
                   isHighlighted
-                    ? "bg-brand-red/15 border-brand-red/50"
-                    : "bg-bg-main/50 border-white/5 hover:border-white/20"
+                    ? "bg-brand-red/12"
+                    : "hover:bg-white/[0.03]"
                 }`}
               >
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 tabular-nums">
                     <span
-                      className={`text-xs font-bold ${
-                        item.isMax ? "text-brand-red" : "text-text-sub"
+                      className={`text-xs font-mono font-bold w-6 shrink-0 ${
+                        item.isMax ? "text-brand-red" : "text-text-muted"
                       }`}
                     >
                       {idx + 1}위
@@ -70,12 +64,15 @@ export function GoldenTimePanel({
                       {item.time}~{item.endTime}
                     </span>
                   </div>
-                  <p className="text-[11px] text-text-muted truncate mt-0.5">
+                  <p className="text-[11px] text-text-muted truncate mt-0.5 pl-8">
                     {item.availableNames.join(", ")}
                   </p>
                 </div>
 
-                <Badge variant={item.isMax ? "brand" : "default"} className="shrink-0">
+                <Badge
+                  variant={item.isMax ? "brand" : "default"}
+                  className="shrink-0 tabular-nums"
+                >
                   {item.count}/{item.totalParticipants}명
                 </Badge>
               </button>
@@ -83,6 +80,6 @@ export function GoldenTimePanel({
           })}
         </div>
       )}
-    </div>
+    </Card>
   );
 }

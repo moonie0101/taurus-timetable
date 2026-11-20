@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Clock,
-  LockSimple,
-  Plus,
-} from "@phosphor-icons/react";
+import { LockSimple, Plus } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 import { reservationApi, weekApi } from "../../../api/taurusApi";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { Checkbox } from "../../../components/ui/Checkbox";
+import { InlineAlert } from "../../../components/ui/InlineAlert";
 import { Input } from "../../../components/ui/Input";
 import { Modal } from "../../../components/ui/Modal";
 import { Select } from "../../../components/ui/Select";
@@ -59,6 +56,7 @@ export function TimetableCreatePage() {
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     weekApi
@@ -242,12 +240,14 @@ export function TimetableCreatePage() {
 
   const handleOpenConfirm = () => {
     if (selectedDates.length === 0) return;
+    setCreateError(null);
     setConfirmOpen(true);
   };
 
   const handleCreate = async () => {
     try {
       setCreating(true);
+      setCreateError(null);
       const created = await timetableApi.create({
         title: title.trim() || "합주 시간 조율",
         dates: selectedDates,
@@ -260,32 +260,34 @@ export function TimetableCreatePage() {
       navigate(`/timetable/${created.id}`);
     } catch (err) {
       console.error(err);
-      alert("시간표 생성에 실패했습니다.");
+      setCreateError("시간표 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setCreating(false);
     }
   };
 
   return (
-    <PageContainer className="pb-16 space-y-8">
+    <PageContainer className="pb-16 space-y-6">
       <PageHeader
-        title="시간 조율 (타임테이블)"
-        description="시간 조율 링크를 만들어 팀원들에게 공유하고, 합주 골든타임을 찾아 바로 예약하세요."
+        title="시간 조율"
+        description="후보 날짜와 시간을 고르고 필요 없는 시간을 미리 잠근 뒤 공유 링크를 만드세요."
       />
 
       {/* Main 3-Step Creation + Live Lockable Preview */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
         <div className="md:col-span-7 space-y-5">
-          {/* Step 1: Meeting Title */}
+          {/* Step 01: Meeting Title */}
           <Card className="p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="w-6 h-6 rounded-full bg-brand-red text-white text-xs font-bold flex items-center justify-center">
-                  1
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-mono font-semibold text-text-muted tabular-nums">
+                  01
                 </span>
                 <h3 className="text-base font-bold text-text-main">모임 이름</h3>
               </div>
-              <span className="text-xs text-text-muted">{title.length}/30</span>
+              <span className="text-xs text-text-muted tabular-nums">
+                {title.length}/30
+              </span>
             </div>
 
             <Input
@@ -295,15 +297,15 @@ export function TimetableCreatePage() {
               onChange={(e) => setTitle(e.target.value)}
             />
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {TITLE_PRESETS.map((preset) => (
                 <button
                   key={preset}
                   type="button"
                   onClick={() => setTitle(preset)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
                     title === preset
-                      ? "bg-brand-red/20 border-brand-red text-brand-red"
+                      ? "bg-brand-red/15 border-brand-red/70 text-brand-red"
                       : "bg-bg-main border-border text-text-sub hover:text-white hover:border-border-active"
                   }`}
                 >
@@ -313,11 +315,11 @@ export function TimetableCreatePage() {
             </div>
           </Card>
 
-          {/* Step 2: Candidate Dates */}
+          {/* Step 02: Candidate Dates */}
           <Card className="p-5 space-y-4">
-            <div className="flex items-center gap-2.5">
-              <span className="w-6 h-6 rounded-full bg-brand-red text-white text-xs font-bold flex items-center justify-center">
-                2
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs font-mono font-semibold text-text-muted tabular-nums">
+                02
               </span>
               <h3 className="text-base font-bold text-text-main">후보 날짜</h3>
             </div>
@@ -327,27 +329,25 @@ export function TimetableCreatePage() {
             />
           </Card>
 
-          {/* Step 3: Time Range & Granularity */}
+          {/* Step 03: Time Range & Granularity */}
           <Card className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="w-6 h-6 rounded-full bg-brand-red text-white text-xs font-bold flex items-center justify-center">
-                  3
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-mono font-semibold text-text-muted tabular-nums">
+                  03
                 </span>
                 <h3 className="text-base font-bold text-text-main">
                   시간 범위 및 단위
                 </h3>
               </div>
 
-              <label className="inline-flex items-center gap-2 cursor-pointer text-xs text-text-sub">
-                <span>시간 범위 지정</span>
-                <input
-                  type="checkbox"
-                  checked={useTimeRange}
-                  onChange={(e) => setUseTimeRange(e.target.checked)}
-                  className="accent-brand-red w-4 h-4 cursor-pointer"
-                />
-              </label>
+              <Checkbox
+                checked={useTimeRange}
+                onChange={(e) => setUseTimeRange(e.target.checked)}
+                label={
+                  <span className="text-xs text-text-sub">시간 범위 지정</span>
+                }
+              />
             </div>
 
             {useTimeRange && (
@@ -379,7 +379,7 @@ export function TimetableCreatePage() {
                 <button
                   type="button"
                   onClick={() => setIntervalMinutes(60)}
-                  className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  className={`py-2.5 px-3 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
                     intervalMinutes === 60
                       ? "bg-brand-red/15 border-brand-red text-white"
                       : "bg-bg-main border-border text-text-sub hover:text-white"
@@ -390,7 +390,7 @@ export function TimetableCreatePage() {
                 <button
                   type="button"
                   onClick={() => setIntervalMinutes(30)}
-                  className={`py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  className={`py-2.5 px-3 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
                     intervalMinutes === 30
                       ? "bg-brand-red/15 border-brand-red text-white"
                       : "bg-bg-main border-border text-text-sub hover:text-white"
@@ -401,7 +401,7 @@ export function TimetableCreatePage() {
               </div>
             </div>
 
-            <div className="pt-2 border-t border-border space-y-1.5">
+            <div className="pt-3 border-t border-border space-y-1.5">
               <Checkbox
                 checked={autoLockRoomSlots}
                 onChange={(e) => {
@@ -410,7 +410,7 @@ export function TimetableCreatePage() {
                 }}
                 label={
                   <span className="text-xs text-text-sub">
-                    토러스 합주실에 이미 확정 예약된 시간 자동 잠금
+                    합주실 확정 예약 시간 자동 잠금
                   </span>
                 }
               />
@@ -423,47 +423,41 @@ export function TimetableCreatePage() {
 
         {/* Right Column: Live Interactive Time Lock + Preview & Create CTA */}
         <div className="md:col-span-5 md:sticky md:top-20 space-y-4">
-          <Card className="p-5 space-y-4 border-white/10">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <LockSimple size={17} weight="bold" className="text-brand-red" />
-                <h3 className="text-base font-bold text-white">
-                  미리보기 · 시간 잠금
-                </h3>
-              </div>
-              <div className="flex items-center gap-1.5">
+          <Card className="p-5 space-y-4">
+            <div className="space-y-2 pb-3 border-b border-border">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <LockSimple size={15} weight="bold" className="text-brand-red shrink-0" />
+                  <h3 className="text-base font-bold text-white truncate">
+                    {title.trim() || "미리보기 · 시간 잠금"}
+                  </h3>
+                </div>
                 {totalLockedCount > 0 && (
-                  <Badge variant="brand">{totalLockedCount}칸 잠김</Badge>
+                  <Badge variant="brand" className="shrink-0 tabular-nums">
+                    {totalLockedCount}칸 잠김
+                  </Badge>
                 )}
-                <Badge variant="outline">
-                  {intervalMinutes === 60 ? "1시간" : "30분"}
-                </Badge>
               </div>
-            </div>
 
-            <div className="bg-bg-main rounded-xl p-3.5 border border-white/5 space-y-2 text-xs">
-              <p className="font-bold text-sm text-white truncate">
-                {title.trim() || "합주 시간 조율"}
-              </p>
-              <div className="flex items-center gap-3 text-text-sub">
-                <span>후보 날짜 {selectedDates.length}일</span>
-                <span>·</span>
-                <span className="flex items-center gap-1">
-                  <Clock size={12} />
-                  {String(effectiveStartHour).padStart(2, "0")}:00 ~{" "}
-                  {String(effectiveEndHour).padStart(2, "0")}:00
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-text-sub tabular-nums">
+                <span>
+                  후보 {selectedDates.length}일 ·{" "}
+                  {String(effectiveStartHour).padStart(2, "0")}:00~
+                  {String(effectiveEndHour).padStart(2, "0")}:00 ·{" "}
+                  {intervalMinutes === 60 ? "1시간" : "30분"}
                 </span>
               </div>
-              <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-white/5 text-[10px] text-text-sub">
-                <span className="inline-flex items-center gap-1">
+
+              <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-text-sub">
+                <span className="inline-flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-sm bg-red-950 border border-red-500/45" />
                   관리자 잠금
                 </span>
-                <span className="inline-flex items-center gap-1">
+                <span className="inline-flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-sm bg-neutral-800 border border-white/20" />
                   직접/확정 잠금
                 </span>
-                <span className="inline-flex items-center gap-1">
+                <span className="inline-flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-sm bg-amber-500/40 border border-amber-400/70" />
                   미리예약 대기
                 </span>
@@ -472,19 +466,19 @@ export function TimetableCreatePage() {
 
             {selectedDates.length > 0 ? (
               <>
-                <div className="flex items-center justify-between gap-2 text-[11px] text-text-sub">
-                  <span>칸을 클릭·드래그해 선택 불가 시간을 미리 잠그세요.</span>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center justify-between gap-2 text-xs text-text-sub">
+                  <span>칸을 눌러 선택 불가 시간을 미리 잠그세요.</span>
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={() => setTouchDragLock((v) => !v)}
-                      className={`sm:hidden px-2 py-1 rounded-md text-[10px] font-semibold border transition-colors cursor-pointer ${
+                      className={`sm:hidden px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors cursor-pointer ${
                         touchDragLock
-                          ? "bg-brand-red/20 border-brand-red text-brand-red"
+                          ? "bg-brand-red/15 border-brand-red text-brand-red"
                           : "bg-bg-main border-border text-text-sub"
                       }`}
                     >
-                      {touchDragLock ? "드래그 잠금 ON" : "드래그 잠금"}
+                      {touchDragLock ? "드래그 ON" : "드래그 잠금"}
                     </button>
                     {hasManualOverride && (
                       <button
@@ -493,9 +487,9 @@ export function TimetableCreatePage() {
                           setManualLockedSlots([]);
                           setManualUnlockedSlots([]);
                         }}
-                        className="text-[11px] text-text-muted hover:text-white underline cursor-pointer"
+                        className="text-xs text-text-muted hover:text-white underline cursor-pointer"
                       >
-                        잠금 초기화
+                        초기화
                       </button>
                     )}
                   </div>
@@ -517,49 +511,51 @@ export function TimetableCreatePage() {
                 </div>
 
                 {overlappingRoomEntries.length > 0 && (
-                  <div className="bg-bg-main/80 border border-white/10 rounded-xl p-3 space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar">
-                    <p className="text-[11px] font-bold text-text-sub">
-                      선택한 날짜의 기존 예약 · 미리예약 ({overlappingRoomEntries.length}건)
+                  <div className="pt-3 border-t border-border space-y-1.5">
+                    <p className="text-xs font-semibold text-text-sub tabular-nums">
+                      선택 날짜 기존 예약 ({overlappingRoomEntries.length}건)
                     </p>
-                    {overlappingRoomEntries.map((r) => {
-                      const d = dayjs(r.startTime);
-                      const isPending = r.status === ReservationStatus.PENDING;
-                      const isAdmin =
-                        r.status === ReservationStatus.CONFIRMED_ADMIN;
-                      return (
-                        <div
-                          key={r.id}
-                          className="flex items-center justify-between gap-2 text-[11px]"
-                        >
-                          <span className="text-text-main font-mono">
-                            {d.format("M/D(ddd) HH:mm")}
-                          </span>
-                          <span
-                            className={`truncate font-semibold ${
-                              isAdmin
-                                ? "text-red-400"
-                                : isPending
-                                ? "text-amber-400"
-                                : "text-emerald-400"
-                            }`}
+                    <div className="divide-y divide-border/60 max-h-32 overflow-y-auto custom-scrollbar">
+                      {overlappingRoomEntries.map((r) => {
+                        const d = dayjs(r.startTime);
+                        const isPending = r.status === ReservationStatus.PENDING;
+                        const isAdmin =
+                          r.status === ReservationStatus.CONFIRMED_ADMIN;
+                        return (
+                          <div
+                            key={r.id}
+                            className="flex items-center justify-between gap-2 py-1.5 text-xs"
                           >
-                            {isAdmin
-                              ? `관리자 (${r.description || "점유"})`
-                              : isPending
-                              ? `미리예약: ${r.teamName || "대기"}`
-                              : `확정: ${r.teamName || "예약됨"}`}
-                          </span>
-                        </div>
-                      );
-                    })}
+                            <span className="text-text-main font-mono tabular-nums">
+                              {d.format("M/D(ddd) HH:mm")}
+                            </span>
+                            <span
+                              className={`truncate font-medium ${
+                                isAdmin
+                                  ? "text-red-400"
+                                  : isPending
+                                  ? "text-amber-400"
+                                  : "text-emerald-400"
+                              }`}
+                            >
+                              {isAdmin
+                                ? `관리자 · ${r.description || "점유"}`
+                                : isPending
+                                ? `미리예약 · ${r.teamName || "대기"}`
+                                : `확정 · ${r.teamName || "예약됨"}`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </>
             ) : (
-              <div className="py-12 text-center text-xs text-text-muted border border-dashed border-white/10 rounded-xl">
-                후보 날짜를 선택하거나 드래그하면
+              <div className="py-12 text-center text-xs text-text-muted border border-dashed border-border rounded-lg">
+                후보 날짜를 선택하면
                 <br />
-                시간표 잠금 설정과 기존 합주실 예약 현황이 표시됩니다.
+                시간 잠금 설정과 기존 합주실 예약 현황이 표시됩니다.
               </div>
             )}
 
@@ -568,7 +564,7 @@ export function TimetableCreatePage() {
               fullWidth
               onClick={handleOpenConfirm}
               disabled={selectedDates.length === 0}
-              className="gap-2 shadow-lg shadow-brand-red/25"
+              className="gap-2"
             >
               <Plus size={18} weight="bold" />
               {selectedDates.length > 0
@@ -576,10 +572,6 @@ export function TimetableCreatePage() {
                 : "후보 날짜를 선택해주세요"}
             </Button>
           </Card>
-
-          <p className="text-[11px] text-text-muted text-center">
-            링크를 만든 뒤 바로 팀원들에게 카카오톡으로 공유할 수 있습니다.
-          </p>
         </div>
       </div>
 
@@ -591,14 +583,20 @@ export function TimetableCreatePage() {
         maxWidth="max-w-md"
       >
         <div className="space-y-4">
-          <div className="bg-bg-main/80 border border-border rounded-xl p-4 space-y-2.5 text-sm">
-            <div className="flex justify-between gap-3">
+          {createError && (
+            <InlineAlert variant="error" className="my-0!">
+              {createError}
+            </InlineAlert>
+          )}
+
+          <div className="divide-y divide-border rounded-xl border border-border bg-bg-main/60 px-4 text-sm">
+            <div className="flex justify-between gap-3 py-2.5">
               <span className="text-text-sub shrink-0">모임 이름</span>
               <span className="font-bold text-white truncate">
                 {title.trim() || "합주 시간 조율"}
               </span>
             </div>
-            <div className="flex justify-between gap-3">
+            <div className="flex justify-between gap-3 py-2.5 tabular-nums">
               <span className="text-text-sub shrink-0">후보 날짜</span>
               <span className="font-semibold text-white">
                 {selectedDates.length}일 (
@@ -606,7 +604,7 @@ export function TimetableCreatePage() {
                 {dayjs(selectedDates[selectedDates.length - 1]).format("M/D")})
               </span>
             </div>
-            <div className="flex justify-between gap-3">
+            <div className="flex justify-between gap-3 py-2.5 tabular-nums">
               <span className="text-text-sub shrink-0">시간 범위</span>
               <span className="font-semibold text-white">
                 {String(effectiveStartHour).padStart(2, "0")}:00 ~{" "}
@@ -614,7 +612,7 @@ export function TimetableCreatePage() {
                 {intervalMinutes}분)
               </span>
             </div>
-            <div className="flex justify-between gap-3">
+            <div className="flex justify-between gap-3 py-2.5 tabular-nums">
               <span className="text-text-sub shrink-0">잠긴 시간</span>
               <span className="font-semibold text-white">
                 {totalLockedCount > 0

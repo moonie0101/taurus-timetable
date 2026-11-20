@@ -319,7 +319,7 @@ export function TimeGrid({
             return (
               <div
                 key={dateStr}
-                className="py-1.5 px-0.5 text-center border-r border-border last:border-r-0"
+                className="py-1.5 px-0.5 text-center border-r border-border last:border-r-0 tabular-nums"
               >
                 <div className="text-[10px] sm:text-xs font-bold text-text-main leading-tight">
                   {d.format("M/D")}
@@ -373,12 +373,12 @@ export function TimeGrid({
                 {/* Left Time Axis: hour label positioned directly on the TOP line of each hour row */}
                 <div className="relative border-r border-border bg-surface/30">
                   {showHourLabel && (
-                    <span className="absolute right-1 top-0 -translate-y-1/2 text-[10px] font-mono font-semibold text-text-sub leading-none bg-bg-main/90 px-0.5 z-10">
+                    <span className="absolute right-1 top-0 -translate-y-1/2 text-[10px] font-mono tabular-nums font-semibold text-text-sub leading-none bg-bg-main/90 px-0.5 z-10">
                       {hourNumber}
                     </span>
                   )}
                   {isLastRow && (
-                    <span className="absolute right-1 bottom-0 translate-y-1/2 text-[10px] font-mono font-semibold text-text-sub leading-none bg-bg-main/90 px-0.5 z-10">
+                    <span className="absolute right-1 bottom-0 translate-y-1/2 text-[10px] font-mono tabular-nums font-semibold text-text-sub leading-none bg-bg-main/90 px-0.5 z-10">
                       {endHour}
                     </span>
                   )}

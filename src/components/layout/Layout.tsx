@@ -85,11 +85,6 @@ export function Drawer({
               }`}
             >
               <span>{item.label}</span>
-              {item.path === ROUTES.TIMETABLE && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand-red/20 text-brand-red border border-brand-red/30 font-semibold">
-                  NEW
-                </span>
-              )}
             </button>
           );
         })}

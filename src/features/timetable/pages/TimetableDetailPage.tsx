@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowsClockwise,
-  CalendarBlank,
   Check,
-  Clock,
   Copy,
-  LinkSimple,
   ShareNetwork,
   UserPlus,
   Users,
@@ -16,6 +13,7 @@ import { reservationApi, weekApi } from "../../../api/taurusApi";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
+import { InlineAlert } from "../../../components/ui/InlineAlert";
 import { EmptyState, PageContainer } from "../../../components/ui/Typography";
 import { ROUTES } from "../../../constants/routes";
 import dayjs from "../../../lib/dayjs";
@@ -56,6 +54,7 @@ export function TimetableDetailPage() {
   );
   const [saving, setSaving] = useState(false);
   const [saveBanner, setSaveBanner] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Heatmap inspection & filtering
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -255,6 +254,7 @@ export function TimetableDetailPage() {
         ? participant.availableSlots.filter((k) => !effectiveLockedSet.has(k))
         : []
     );
+    setSaveError(null);
     setInteractionMode("edit");
   };
 
@@ -279,6 +279,7 @@ export function TimetableDetailPage() {
     }
     try {
       setSaving(true);
+      setSaveError(null);
       const sanitizedSlots = draftSlots.filter((k) => !effectiveLockedSet.has(k));
       const updated = await timetableApi.upsertParticipant(id, {
         name: activeAuth.name,
@@ -287,10 +288,10 @@ export function TimetableDetailPage() {
       });
       setDraftSlots(sanitizedSlots);
       setTimetable(updated);
-      setSaveBanner("저장되었습니다!");
+      setSaveBanner("일정이 저장되었습니다.");
       setTimeout(() => setSaveBanner(null), 2500);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "저장에 실패했습니다.");
+      setSaveError(err instanceof Error ? err.message : "저장에 실패했습니다.");
     } finally {
       setSaving(false);
     }
@@ -327,26 +328,21 @@ export function TimetableDetailPage() {
   );
 
   return (
-    <PageContainer className="pb-16 space-y-5">
-      {/* Top Header Bar */}
+    <PageContainer className="pb-16 space-y-6">
+      {/* Top Header Bar: Title-first hierarchy matching Taurus PageHeader */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border pb-4">
-        <div className="space-y-1.5 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="brand">시간 조율</Badge>
-            <Badge variant="outline">
-              {timetable.intervalMinutes === 60 ? "1시간 단위" : "30분 단위"}
-            </Badge>
-            <span className="text-xs text-text-sub flex items-center gap-1">
-              <CalendarBlank size={13} />
-              {firstDate} ~ {lastDate} ({timetable.dates.length}일)
-            </span>
-          </div>
+        <div className="space-y-1 min-w-0">
           <h2 className="text-2xl font-bold text-text-main tracking-tight truncate">
             {timetable.title}
           </h2>
+          <p className="text-xs text-text-sub tabular-nums">
+            {firstDate} ~ {lastDate} ({timetable.dates.length}일) ·{" "}
+            {timetable.intervalMinutes === 60 ? "1시간 단위" : "30분 단위"} · 참여자{" "}
+            {timetable.participants.length}명
+          </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
+        <div className="flex items-center gap-1.5 flex-wrap shrink-0">
           <Button
             variant="ghost"
             size="sm"
@@ -356,7 +352,7 @@ export function TimetableDetailPage() {
             title="최신 응답 새로고침"
           >
             <ArrowsClockwise
-              size={15}
+              size={14}
               className={refreshing ? "animate-spin" : ""}
             />
             새로고침
@@ -369,12 +365,12 @@ export function TimetableDetailPage() {
           >
             {copied ? (
               <>
-                <Check size={15} className="text-status-success" />
+                <Check size={14} className="text-status-success" />
                 복사됨
               </>
             ) : (
               <>
-                <Copy size={15} />
+                <Copy size={14} />
                 링크 복사
               </>
             )}
@@ -385,16 +381,16 @@ export function TimetableDetailPage() {
             onClick={handleShare}
             className="gap-1.5 sm:hidden"
           >
-            <ShareNetwork size={15} />
+            <ShareNetwork size={14} />
             공유
           </Button>
           <Button
-            variant="brand"
+            variant="outline"
             size="sm"
             onClick={() => navigate(ROUTES.TIMETABLE)}
             className="gap-1"
           >
-            <Plus className="w-4 h-4" />새 테이블
+            <Plus className="w-3.5 h-3.5" />새 시간표
           </Button>
         </div>
       </div>
@@ -403,7 +399,7 @@ export function TimetableDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
         {/* MAIN COLUMN: Unified Timetable (My Schedule + Group Heatmap in one 7-day grid) */}
         <div className="md:col-span-7 space-y-4">
-          <Card className="p-3.5 sm:p-5 space-y-4">
+          <Card className="p-4 sm:p-5 space-y-4">
             {/* Participation & Mode Controls */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
@@ -413,8 +409,8 @@ export function TimetableDetailPage() {
                 </div>
                 <p className="text-xs text-text-sub mt-0.5">
                   {activeAuth && interactionMode === "edit"
-                    ? "전체 현황을 보면서 내 가능 시간을 드래그로 체크하고 저장하세요."
-                    : "칸을 두 번 누르거나(더블탭) 아래 버튼을 누르면 상세 명단이 열립니다."}
+                    ? "가능한 시간을 드래그로 선택한 뒤 저장하세요."
+                    : "칸을 두 번 누르거나 선택 후 상세 명단 버튼을 누르세요."}
                 </p>
               </div>
 
@@ -443,44 +439,51 @@ export function TimetableDetailPage() {
 
             {/* Mode Switcher when logged in (Drag Edit vs Tap Inspect) */}
             {activeAuth && (
-              <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-bg-main border border-border">
+              <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-bg-main border border-border">
                 <button
                   type="button"
                   onClick={() => setInteractionMode("edit")}
-                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`py-2 px-3 rounded-md text-xs font-semibold tabular-nums transition-colors cursor-pointer ${
                     interactionMode === "edit"
-                      ? "bg-brand-red text-white shadow"
+                      ? "bg-brand-red text-white"
                       : "text-text-sub hover:text-white"
                   }`}
                 >
-                  내 일정 선택 (드래그 · {draftSlots.length}칸)
+                  내 일정 선택 ({draftSlots.length}칸)
                 </button>
                 <button
                   type="button"
                   onClick={() => setInteractionMode("inspect")}
-                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`py-2 px-3 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
                     interactionMode === "inspect"
-                      ? "bg-surface-elevated text-white border border-white/15"
+                      ? "bg-surface-elevated text-white"
                       : "text-text-sub hover:text-white"
                   }`}
                 >
-                  시간대 명단 보기 (더블탭)
+                  시간대 명단 보기
                 </button>
               </div>
             )}
 
             {saveBanner && (
-              <div className="p-2.5 rounded-xl bg-status-success/15 border border-status-success/30 text-status-success text-xs font-bold text-center animate-in fade-in">
+              <InlineAlert variant="success" className="my-0! py-2.5!">
                 {saveBanner}
-              </div>
+              </InlineAlert>
+            )}
+            {saveError && (
+              <InlineAlert variant="error" className="my-0! py-2.5!">
+                {saveError}
+              </InlineAlert>
             )}
 
             {/* Participant Filter Pills + Legend */}
-            <div className="space-y-2.5">
+            <div className="space-y-2.5 pt-2 border-t border-border">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-text-sub">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-text-sub">
                   <Users size={14} />
-                  <span>참여자 ({timetable.participants.length})</span>
+                  <span className="tabular-nums">
+                    참여자 {timetable.participants.length}명
+                  </span>
                   {focusedParticipant && (
                     <span className="text-brand-red">
                       · {focusedParticipant}만 보기
@@ -488,7 +491,7 @@ export function TimetableDetailPage() {
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 text-[10px] text-text-sub">
+                <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-text-sub">
                   {activeAuth && (
                     <span className="inline-flex items-center gap-1">
                       <span className="w-2.5 h-2.5 rounded-sm border border-emerald-400 bg-emerald-400/30" />
@@ -497,10 +500,10 @@ export function TimetableDetailPage() {
                   )}
                   <span className="inline-flex items-center gap-1">
                     <span className="w-2.5 h-2.5 rounded-sm border border-amber-400/80 bg-amber-400/50" />
-                    미리예약 대기 (선택 가능)
+                    미리예약 대기
                   </span>
                   {maxCount > 0 && (
-                    <span className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1 tabular-nums">
                       <span>0</span>
                       <span className="flex gap-0.5">
                         {[0.2, 0.5, 0.85].map((a, i) => (
@@ -521,7 +524,7 @@ export function TimetableDetailPage() {
                 <button
                   type="button"
                   onClick={() => setFocusedParticipant(null)}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
                     focusedParticipant === null
                       ? "bg-brand-red text-white border-brand-red"
                       : "bg-bg-main border-border text-text-sub hover:text-white"
@@ -538,7 +541,7 @@ export function TimetableDetailPage() {
                       onClick={() =>
                         setFocusedParticipant(isFocused ? null : p.name)
                       }
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
                         isFocused
                           ? "bg-brand-red text-white border-brand-red"
                           : "bg-bg-main border-border text-text-main hover:border-border-active"
@@ -553,9 +556,8 @@ export function TimetableDetailPage() {
 
             {/* Highlighted Slot Preview Bar (prevents accidental mobile scroll taps from popping up modal) */}
             {!(activeAuth && interactionMode === "edit") && selectedInspectSlot && (
-              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-bg-main/90 border border-white/15 text-xs animate-in fade-in">
-                <span className="text-text-main truncate min-w-0 flex-1">
-                  선택됨:{" "}
+              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-bg-main border border-border-active text-xs animate-in fade-in">
+                <span className="text-text-main truncate min-w-0 flex-1 tabular-nums">
                   <strong className="text-white">
                     {dayjs(selectedInspectSlot.date).format("M/D(ddd)")}{" "}
                     {selectedInspectSlot.time}~{selectedInspectSlot.endTime}
@@ -603,9 +605,9 @@ export function TimetableDetailPage() {
             />
 
             {activeAuth && interactionMode === "edit" && (
-              <div className="flex items-center justify-between gap-3 pt-1">
-                <span className="text-xs text-text-sub">
-                  내 선택:{" "}
+              <div className="flex items-center justify-between gap-3 pt-2 border-t border-border">
+                <span className="text-xs text-text-sub tabular-nums">
+                  내 선택{" "}
                   <strong className="text-emerald-400">
                     {draftSlots.length}칸
                   </strong>
@@ -633,7 +635,7 @@ export function TimetableDetailPage() {
           </Card>
         </div>
 
-        {/* SIDEBAR COLUMN: Golden Time + Pre-reservations / Room Status + Invite Link */}
+        {/* SIDEBAR COLUMN: Golden Time + Room Schedule */}
         <div className="md:col-span-5 space-y-5">
           <GoldenTimePanel
             goldenTimes={goldenTimes}
@@ -647,23 +649,22 @@ export function TimetableDetailPage() {
           />
 
           {/* Pre-reserved / Occupied Room Schedule Card for Timetable Dates */}
-          <Card className="p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Clock size={16} className="text-amber-400" />
-                <h3 className="text-sm font-bold text-text-main">
-                  기간 내 합주실 예약 · 미리 예약 현황
-                </h3>
-              </div>
-              <Badge variant="outline">{overlappingRoomEntries.length}건</Badge>
+          <Card className="overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
+              <h3 className="text-sm font-bold text-text-main">
+                기간 내 합주실 예약 현황
+              </h3>
+              <span className="text-xs text-text-sub tabular-nums">
+                {overlappingRoomEntries.length}건
+              </span>
             </div>
 
             {overlappingRoomEntries.length === 0 ? (
-              <p className="text-xs text-text-muted py-3 text-center bg-bg-main/40 rounded-xl border border-dashed border-white/5">
-                이 기간에는 아직 합주실 예약/미리예약이 없습니다.
+              <p className="text-xs text-text-sub py-6 px-4 text-center">
+                이 기간에 등록된 합주실 예약이 없습니다.
               </p>
             ) : (
-              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+              <div className="divide-y divide-border max-h-56 overflow-y-auto custom-scrollbar">
                 {overlappingRoomEntries.map((r) => {
                   const d = dayjs(r.startTime);
                   const isPending = r.status === ReservationStatus.PENDING;
@@ -672,16 +673,16 @@ export function TimetableDetailPage() {
                   return (
                     <div
                       key={r.id}
-                      className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-bg-main/60 border border-white/5 text-xs"
+                      className="flex items-center justify-between gap-2 px-4 py-2.5 text-xs"
                     >
-                      <span className="font-mono text-text-main shrink-0">
+                      <span className="font-mono text-text-main tabular-nums shrink-0">
                         {d.format("M/D(ddd) HH:mm")}
                       </span>
                       <Badge
                         variant={
                           isAdmin ? "danger" : isPending ? "warn" : "success"
                         }
-                        className="truncate max-w-[160px]"
+                        className="truncate max-w-[170px]"
                       >
                         {isAdmin
                           ? `관리자 · ${r.description || "점유"}`
@@ -694,23 +695,6 @@ export function TimetableDetailPage() {
                 })}
               </div>
             )}
-          </Card>
-
-          <Card className="p-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <LinkSimple size={18} className="text-brand-red shrink-0" />
-              <span className="text-xs text-text-sub truncate font-mono">
-                {shareUrl}
-              </span>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCopyLink}
-              className="shrink-0"
-            >
-              {copied ? "복사됨!" : "복사"}
-            </Button>
           </Card>
         </div>
       </div>
