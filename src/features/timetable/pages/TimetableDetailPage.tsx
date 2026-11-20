@@ -48,10 +48,8 @@ export function TimetableDetailPage() {
     password: string;
   } | null>(null);
   const [draftSlots, setDraftSlots] = useState<string[]>([]);
-  // Unified grid interaction toggle when logged in: drag-paint my schedule vs tap-inspect cell
-  const [interactionMode, setInteractionMode] = useState<"edit" | "inspect">(
-    "inspect"
-  );
+  // Inline schedule edit mode (shows green checkmarks + enables drag select; saving exits to overview)
+  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveBanner, setSaveBanner] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -255,7 +253,41 @@ export function TimetableDetailPage() {
         : []
     );
     setSaveError(null);
-    setInteractionMode("edit");
+    setIsEditing(true);
+  };
+
+  const handleStartEditing = () => {
+    if (!activeAuth) {
+      setAuthModalOpen(true);
+      return;
+    }
+    const existing = timetable?.participants.find(
+      (p) => p.name === activeAuth.name
+    );
+    setDraftSlots(
+      existing
+        ? existing.availableSlots.filter((k) => !effectiveLockedSet.has(k))
+        : []
+    );
+    setSaveError(null);
+    setIsEditing(true);
+  };
+
+  const handleCancelEditing = () => {
+    if (activeAuth && timetable) {
+      const existing = timetable.participants.find(
+        (p) => p.name === activeAuth.name
+      );
+      setDraftSlots(
+        existing
+          ? existing.availableSlots.filter((k) => !effectiveLockedSet.has(k))
+          : []
+      );
+    } else {
+      setDraftSlots([]);
+    }
+    setSaveError(null);
+    setIsEditing(false);
   };
 
   const handleDeleteParticipant = async (name: string, password: string) => {
@@ -265,11 +297,12 @@ export function TimetableDetailPage() {
     if (activeAuth?.name === name) {
       setActiveAuth(null);
       setDraftSlots([]);
-      setInteractionMode("inspect");
+      setIsEditing(false);
     }
     if (focusedParticipant === name) {
       setFocusedParticipant(null);
     }
+    setSelectedInspectSlot(null);
   };
 
   const handleSaveMySchedule = async () => {
@@ -288,6 +321,8 @@ export function TimetableDetailPage() {
       });
       setDraftSlots(sanitizedSlots);
       setTimetable(updated);
+      setIsEditing(false);
+      setSelectedInspectSlot(null);
       setSaveBanner("일정이 저장되었습니다.");
       setTimeout(() => setSaveBanner(null), 2500);
     } catch (err: unknown) {
@@ -400,7 +435,7 @@ export function TimetableDetailPage() {
         {/* MAIN COLUMN: Unified Timetable (My Schedule + Group Heatmap in one 7-day grid) */}
         <div className="md:col-span-7 space-y-4">
           <Card className="p-4 sm:p-5 space-y-4">
-            {/* Participation & Mode Controls */}
+            {/* Participation & Edit Controls */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
@@ -408,62 +443,64 @@ export function TimetableDetailPage() {
                   {activeAuth && <Badge variant="brand">{activeAuth.name}</Badge>}
                 </div>
                 <p className="text-xs text-text-sub mt-0.5">
-                  {activeAuth && interactionMode === "edit"
-                    ? "가능한 시간을 드래그로 선택한 뒤 저장하세요."
+                  {activeAuth && isEditing
+                    ? "가능한 시간을 드래그로 선택한 뒤 저장하기를 누르세요."
                     : "칸을 두 번 누르거나 선택 후 상세 명단 버튼을 누르세요."}
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  variant={activeAuth ? "outline" : "brand"}
-                  size="sm"
-                  onClick={() => setAuthModalOpen(true)}
-                  className="gap-1.5"
-                >
-                  <UserPlus size={15} />
-                  {activeAuth ? "변경/삭제" : "참여 / 내 일정 입력"}
-                </Button>
-                {activeAuth && (
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {!activeAuth ? (
                   <Button
                     variant="brand"
                     size="sm"
-                    onClick={handleSaveMySchedule}
-                    disabled={saving}
+                    onClick={() => setAuthModalOpen(true)}
+                    className="gap-1.5"
                   >
-                    {saving ? "저장 중..." : "저장하기"}
+                    <UserPlus size={15} />
+                    참여 / 내 일정 입력
                   </Button>
+                ) : isEditing ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancelEditing}
+                      disabled={saving}
+                    >
+                      취소
+                    </Button>
+                    <Button
+                      variant="brand"
+                      size="sm"
+                      onClick={handleSaveMySchedule}
+                      disabled={saving}
+                    >
+                      {saving ? "저장 중..." : "저장하기"}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAuthModalOpen(true)}
+                      className="gap-1.5"
+                    >
+                      <UserPlus size={15} />
+                      변경/삭제
+                    </Button>
+                    <Button
+                      variant="brand"
+                      size="sm"
+                      onClick={handleStartEditing}
+                    >
+                      내 일정 수정
+                    </Button>
+                  </>
                 )}
               </div>
             </div>
-
-            {/* Mode Switcher when logged in (Drag Edit vs Tap Inspect) */}
-            {activeAuth && (
-              <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-bg-main border border-border">
-                <button
-                  type="button"
-                  onClick={() => setInteractionMode("edit")}
-                  className={`py-2 px-3 rounded-md text-xs font-semibold tabular-nums transition-colors cursor-pointer ${
-                    interactionMode === "edit"
-                      ? "bg-brand-red text-white"
-                      : "text-text-sub hover:text-white"
-                  }`}
-                >
-                  내 일정 선택 ({draftSlots.length}칸)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInteractionMode("inspect")}
-                  className={`py-2 px-3 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
-                    interactionMode === "inspect"
-                      ? "bg-surface-elevated text-white"
-                      : "text-text-sub hover:text-white"
-                  }`}
-                >
-                  시간대 명단 보기
-                </button>
-              </div>
-            )}
 
             {saveBanner && (
               <InlineAlert variant="success" className="my-0! py-2.5!">
@@ -492,7 +529,7 @@ export function TimetableDetailPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-text-sub">
-                  {activeAuth && (
+                  {activeAuth && isEditing && (
                     <span className="inline-flex items-center gap-1">
                       <span className="w-2.5 h-2.5 rounded-sm border border-emerald-400 bg-emerald-400/30" />
                       내 선택
@@ -555,7 +592,7 @@ export function TimetableDetailPage() {
             </div>
 
             {/* Highlighted Slot Preview Bar (prevents accidental mobile scroll taps from popping up modal) */}
-            {!(activeAuth && interactionMode === "edit") && selectedInspectSlot && (
+            {!(activeAuth && isEditing) && selectedInspectSlot && (
               <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-bg-main border border-border-active text-xs animate-in fade-in">
                 <span className="text-text-main truncate min-w-0 flex-1 tabular-nums">
                   <strong className="text-white">
@@ -584,7 +621,7 @@ export function TimetableDetailPage() {
               mode="unified"
               mySelectedSlots={draftSlots}
               onMySelectedSlotsChange={setDraftSlots}
-              interactiveEdit={Boolean(activeAuth && interactionMode === "edit")}
+              interactiveEdit={Boolean(activeAuth && isEditing)}
               lockedSlots={timetable.lockedSlots}
               adminLockedSlots={adminLockedSlots}
               slotMap={slotMap}
@@ -604,7 +641,7 @@ export function TimetableDetailPage() {
               }}
             />
 
-            {activeAuth && interactionMode === "edit" && (
+            {activeAuth && isEditing && (
               <div className="flex items-center justify-between gap-3 pt-2 border-t border-border">
                 <span className="text-xs text-text-sub tabular-nums">
                   내 선택{" "}
@@ -618,10 +655,19 @@ export function TimetableDetailPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => setDraftSlots([])}
+                      disabled={saving}
                     >
                       비우기
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancelEditing}
+                    disabled={saving}
+                  >
+                    취소
+                  </Button>
                   <Button
                     variant="brand"
                     onClick={handleSaveMySchedule}

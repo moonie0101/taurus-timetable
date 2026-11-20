@@ -504,10 +504,10 @@ export function TimeGrid({
                     );
                   }
 
-                  // UNIFIED mode: Heatmap + Full-yellow Waitlist + My Selected Checkmarks
+                  // UNIFIED mode: Heatmap + Full-yellow Waitlist + Edit-only My Selected Checkmarks
                   const slot = slotMap?.get(key);
                   const count = slot?.count || 0;
-                  const isMine = mySelectedSet.has(key);
+                  const isMine = interactiveEdit && mySelectedSet.has(key);
                   const isFocusedAvailable = focusedParticipantName
                     ? slot?.availableNames.includes(focusedParticipantName)
                     : false;
