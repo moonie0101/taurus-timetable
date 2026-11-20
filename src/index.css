@@ -1,0 +1,393 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Pretendard", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  --color-brand-red: #d32c2b;
+  --color-brand-dark: #09090b;
+  --color-surface: #18181b;
+  --color-surface-elevated: #27272a;
+  --color-border: #27272a;
+  --color-border-active: #3f3f46;
+  --color-text-main: #f4f4f5;
+  --color-text-sub: #a1a1aa;
+  --color-text-muted: #52525b;
+
+  --color-status-success: #10b981;
+  --color-status-warn: #f59e0b;
+  --color-status-danger: #ef4444;
+  --color-status-info: #3b82f6;
+
+  --color-primary: var(--color-brand-red);
+  --color-bg-main: var(--color-brand-dark);
+  --color-bg-card: var(--color-surface);
+}
+
+:root {
+  background-color: var(--color-bg-main);
+  color: var(--color-text-main);
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  background-color: var(--color-bg-main);
+  color: var(--color-text-main);
+}
+
+select.taurus-select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: none !important;
+}
+
+select.taurus-select::-ms-expand {
+  display: none;
+}
+
+@supports selector(::picker-icon) {
+  select.taurus-select::picker-icon {
+    display: none;
+  }
+}
+
+/* Custom utility animations matching Taurus drawer & modal transitions */
+@keyframes enterFadeZoom {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInBottom {
+  from {
+    transform: translateY(1rem);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInTop {
+  from {
+    transform: translateY(-0.25rem);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation-duration: 200ms;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+}
+
+.fade-in {
+  animation-name: enterFadeZoom;
+}
+
+.zoom-in-95,
+.zoom-in {
+  animation-name: enterFadeZoom;
+}
+
+.slide-in-from-right {
+  animation-name: slideInRight;
+}
+
+.slide-in-from-bottom-4 {
+  animation-name: slideInBottom;
+}
+
+.slide-in-from-top-1 {
+  animation-name: slideInTop;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Taurus Music-Reactive Hero Styles (faithful to original bundle) */
+.music-reactive-hero {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.visualization-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  pointer-events: none;
+  margin-bottom: 8vh;
+}
+
+.hero-tagline {
+  font-size: 1rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #ffffffb3;
+  margin: 0 3rem 2rem;
+  opacity: 0;
+  animation: fadeIn 1s ease-out 0.5s forwards;
+}
+
+.hero-title {
+  display: flex;
+  flex-direction: column;
+  font-size: 5rem;
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  margin-bottom: 2rem;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+.title-line {
+  display: block;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: slideUpFade 1s ease-out forwards;
+}
+
+.title-line:nth-child(1) {
+  animation-delay: 0.8s;
+}
+
+.title-line:nth-child(2) {
+  animation-delay: 1s;
+}
+
+.title-line:nth-child(3) {
+  animation-delay: 1.2s;
+  color: #fff;
+}
+
+.hero-subtitle {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: #fff9;
+  max-width: 600px;
+  margin: 0 auto;
+  opacity: 0;
+  animation: fadeIn 1s ease-out 1.5s forwards;
+}
+
+.hero-credit {
+  font-size: 0.8rem;
+  color: #fff6;
+  margin-top: 1rem;
+  opacity: 0;
+  animation: fadeIn 1s ease-out 1.8s forwards;
+}
+
+.play-button {
+  position: absolute;
+  bottom: 20%;
+  left: 50%;
+  transform: translate(-50%);
+  z-index: 20;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  padding: 1rem 3rem;
+  font-size: 0.9rem;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.play-button.pulse-animation {
+  background: #ffffff1a;
+  border-color: #ffffff80;
+  animation: pulseGlow 2s infinite;
+}
+
+.play-button:hover {
+  background: #fff;
+  color: #000;
+  border-color: #fff;
+  box-shadow: 0 0 30px #ffffff4d;
+  animation: none;
+}
+
+.play-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.audio-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: #ffffff1a;
+  z-index: 20;
+}
+
+.progress-bar {
+  height: 100%;
+  background: #fff;
+  transition: width 0.1s linear;
+  box-shadow: 0 0 10px #ffffff80;
+}
+
+.bottom-info {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 1rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: monospace;
+  font-size: 0.85rem;
+  text-align: left;
+  color: #fff9;
+}
+
+.album-img {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  object-fit: cover;
+  box-shadow: 0 0 15px #00000080;
+  flex-shrink: 0;
+}
+
+.song-details {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.song-info {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff9;
+  letter-spacing: 0.05em;
+}
+
+.artists {
+  font-size: 9px;
+  opacity: 0.8;
+  color: #ffffff80;
+  white-space: nowrap;
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUpFade {
+  0% {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseGlow {
+  0% {
+    box-shadow: 0 0 #fff6;
+  }
+  70% {
+    box-shadow: 0 0 0 10px #fff0;
+  }
+  to {
+    box-shadow: 0 0 #fff0;
+  }
+}
+
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: 4rem;
+  }
+  .title-line:nth-child(1) {
+    font-size: 2rem;
+  }
+  .title-line:nth-child(2) {
+    font-size: 4rem;
+    color: #d32c2b;
+  }
+}
+
+/* Timetable Golden Time diagonal hatch overlay */
+.timetable-golden-stripe {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.22) 3px,
+    transparent 3px,
+    transparent 7px
+  );
+}
